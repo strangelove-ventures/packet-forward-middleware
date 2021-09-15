@@ -279,7 +279,7 @@ func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddre
 		thischainaddr, err = sdk.AccAddressFromBech32(receiverData)
 		return
 	case len(sep1) >= 2:
-		finaldestination = strings.Join(sep1[:1], ":")
+		finaldestination = strings.Join(sep1[1:], ":")
 	default:
 		return nil, "", "", "", fmt.Errorf("unparsable reciever field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
 	}
@@ -305,7 +305,7 @@ func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddre
 // cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
 
 // second proxy chain reviever field
-// cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
+// somm16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
 
 // final proxy chain reciever field
 // cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
