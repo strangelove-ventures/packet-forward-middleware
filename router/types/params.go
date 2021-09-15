@@ -47,8 +47,12 @@ func validateFeePercentage(i interface{}) error {
 	if !ok {
 		return fmt.Errorf("invalid parameter type: %T", i)
 	}
-	if !(v.GTE(sdk.ZeroDec()) && v.LT(sdk.OneDec())) {
-		return fmt.Errorf("invalid range for fee percentage. expected between 0 and 1 got %d", v.RoundInt64())
+	if v.IsNegative() {
+		return fmt.Errorf("invalid fee percentage. expected not negative, got %d", v.RoundInt64())
+
+	}
+	if !(v.LTE(sdk.OneDec())) {
+		return fmt.Errorf("invalid fee percentage. expected less than one 1 got %d", v.RoundInt64())
 	}
 
 	return nil
