@@ -24,9 +24,9 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/modules/core/04-channel/types"
 	porttypes "github.com/cosmos/ibc-go/modules/core/05-port/types"
 	ibcexported "github.com/cosmos/ibc-go/modules/core/exported"
-	"github.com/cosmos/strangelove-ventures/packet-forward-middleware/router/client/cli"
-	"github.com/cosmos/strangelove-ventures/packet-forward-middleware/router/keeper"
-	"github.com/cosmos/strangelove-ventures/packet-forward-middleware/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/router/client/cli"
+	"github.com/strangelove-ventures/packet-forward-middleware/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
 )
 
 var (

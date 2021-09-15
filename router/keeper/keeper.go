@@ -14,7 +14,7 @@ import (
 	clienttypes "github.com/cosmos/ibc-go/modules/core/02-client/types"
 	host "github.com/cosmos/ibc-go/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/modules/core/types"
-	"github.com/cosmos/strangelove-ventures/packet-forward-middleware/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
 )
 
 // Keeper defines the IBC fungible transfer keeper
