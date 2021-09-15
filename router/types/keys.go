@@ -2,7 +2,7 @@ package types
 
 const (
 	// ModuleName defines the 29-fee name
-	ModuleName = "ibcrouter"
+	ModuleName = "packetfowardmiddleware"
 
 	// StoreKey is the store key string for IBC transfer
 	StoreKey = ModuleName
