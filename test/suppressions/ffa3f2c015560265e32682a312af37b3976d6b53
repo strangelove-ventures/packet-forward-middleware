@@ -1,0 +1,4 @@
+panic: structs not nil on error
+github.com/strangelove-ventures/packet-forward-middleware/test.Fuzz
+go-fuzz-dep.Main
+main.main
