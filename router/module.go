@@ -275,7 +275,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddress, finaldestination, port, channel string, err error) {
 	sep1 := strings.Split(receiverData, ":")
 	switch {
-	case len(sep1) == 1:
+	case len(sep1) == 1 && sep1[0] != "":
 		thischainaddr, err = sdk.AccAddressFromBech32(receiverData)
 		return
 	case len(sep1) >= 2:
