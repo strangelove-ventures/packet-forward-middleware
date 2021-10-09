@@ -1,0 +1,39 @@
+empty address string is not allowed
+panic: structs not nil on error
+
+goroutine 1 [running]:
+github.com/strangelove-ventures/packet-forward-middleware/test.Fuzz({0x7f2278160000, 0x7875786200a0, 0x0})
+	/home/anon/go/src/github.com/strangelove-ventures/packet-forward-middleware/test/test_parser.go:12 +0x213
+go-fuzz-dep.Main({0xc000ddff68, 0x1, 0x121c7a0})
+	go-fuzz-dep/main.go:36 +0x15b
+main.main()
+	github.com/strangelove-ventures/packet-forward-middleware/test/go.fuzz.main/main.go:15 +0x3b
+
+goroutine 82 [IO wait]:
+internal/poll.runtime_pollWait(0x7f2278d098e0, 0x72)
+	runtime/netpoll.go:229 +0x89
+internal/poll.(*pollDesc).wait(0xc000c10100, 0xc00011b130, 0x58)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:84 +0xbb
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/lib/go/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).ReadMsg(0xc000c10100, {0xc00011b130, 0x10, 0x10}, {0xc00053ac20, 0x1000, 0x1000}, 0x1)
+	/usr/lib/go/src/internal/poll/fd_unix.go:250 +0x4d5
+net.(*netFD).readMsg(0xc000c10100, {0xc00011b130, 0x1e62f68, 0xc000cadcf8}, {0xc00053ac20, 0x2000, 0x0}, 0xaa)
+	/usr/lib/go/src/net/fd_posix.go:68 +0x52
+net.(*UnixConn).readMsg(0xc0004fc120, {0xc00011b130, 0x40e934, 0x7f22a23d7a68}, {0xc00053ac20, 0x2000, 0x0})
+	/usr/lib/go/src/net/unixsock_posix.go:116 +0x6a
+net.(*UnixConn).ReadMsgUnix(0xc0004fc120, {0xc00011b130, 0x40e934, 0x451bd7}, {0xc00053ac20, 0x0, 0x7f22a23d7a00})
+	/usr/lib/go/src/net/unixsock.go:143 +0xc6
+github.com/godbus/dbus.(*oobReader).Read(0xc00053ac00, {0xc00011b130, 0xc000cade20, 0x40ec87})
+	/home/anon/go/pkg/mod/github.com/godbus/dbus@v0.0.0-20190726142602-4481cbc300e2/transport_unix.go:21 +0x5d
+io.ReadAtLeast({0x15d58a0, 0xc00053ac00}, {0xc00011b130, 0x10, 0x10}, 0x10)
+	/usr/lib/go/src/io/io.go:328 +0x104
+io.ReadFull(...)
+	/usr/lib/go/src/io/io.go:347
+github.com/godbus/dbus.(*unixTransport).ReadMessage(0xc000df0360)
+	/home/anon/go/pkg/mod/github.com/godbus/dbus@v0.0.0-20190726142602-4481cbc300e2/transport_unix.go:91 +0x1a5
+github.com/godbus/dbus.(*Conn).inWorker(0xc000c9e000)
+	/home/anon/go/pkg/mod/github.com/godbus/dbus@v0.0.0-20190726142602-4481cbc300e2/conn.go:294 +0x6b
+created by github.com/godbus/dbus.(*Conn).Auth
+	/home/anon/go/pkg/mod/github.com/godbus/dbus@v0.0.0-20190726142602-4481cbc300e2/auth.go:118 +0xd65
+exit status 2

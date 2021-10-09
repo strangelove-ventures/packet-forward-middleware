@@ -278,7 +278,7 @@ func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddre
 	case len(sep1) == 1 && sep1[0] != "":
 		thischainaddr, err = sdk.AccAddressFromBech32(receiverData)
 		return
-	case len(sep1) >= 2:
+	case len(sep1) >= 2 && sep1[len(sep1)-1] != "":
 		finaldestination = strings.Join(sep1[1:], ":")
 	default:
 		return nil, "", "", "", fmt.Errorf("unparsable reciever field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
@@ -293,6 +293,10 @@ func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddre
 		return
 	}
 	sep3 := strings.Split(sep2[1], "/")
+	if len(sep3) != 2 {
+		err = fmt.Errorf("formatting incorect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
+		return
+	}
 	port = sep3[0]
 	channel = sep3[1]
 	return
