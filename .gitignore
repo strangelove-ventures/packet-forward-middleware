@@ -7,3 +7,7 @@
 # Editor-based HTTP Client requests
 /httpRequests/
 .idea/*
+test/corpus/
+test/crashers/
+test/suppressions
+test-fuzz.zip
