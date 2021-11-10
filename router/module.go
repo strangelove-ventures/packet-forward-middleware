@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/cobra"
 	abci "github.com/tendermint/tendermint/abci/types"
 
-	transfertypes "github.com/cosmos/ibc-go/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/modules/core/exported"
+	transfertypes "github.com/cosmos/ibc-go/v2/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v2/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v2/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v2/modules/core/exported"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
@@ -252,7 +252,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 			}
-			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(newData.Amount))
+			amount, ok := sdk.NewIntFromString(newData.Amount)
+			if !ok {
+				return channeltypes.NewErrorAcknowledgement("failed to construct int from fungible token packet data amount")
+			}
+
+			var token = sdk.NewCoin(denom, amount)
 			if err := am.keeper.ForwardTransferPacket(ctx, receiver, token, port, channel, finalDest, []metrics.Label{}); err != nil {
 				ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
 			}
@@ -262,13 +267,25 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
-func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) (*sdk.Result, error) {
+func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
 	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 }
 
 // OnTimeoutPacket implements the IBCModule interface
-func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) (*sdk.Result, error) {
+func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
+}
+
+// NegotiateAppVersion implements the IBCModue interface
+func (am AppModule) NegotiateAppVersion(
+	ctx sdk.Context,
+	order channeltypes.Order,
+	connectionID string,
+	portID string,
+	counterparty channeltypes.Counterparty,
+	proposedVersion string,
+) (string, error) {
+	return am.app.NegotiateAppVersion(ctx, order, connectionID, portID, counterparty, proposedVersion)
 }
 
 // For now this assumes one hop, should be better parsing
