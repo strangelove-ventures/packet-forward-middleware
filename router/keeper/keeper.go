@@ -11,9 +11,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	clienttypes "github.com/cosmos/ibc-go/modules/core/02-client/types"
-	host "github.com/cosmos/ibc-go/modules/core/24-host"
-	coretypes "github.com/cosmos/ibc-go/modules/core/types"
+	clienttypes "github.com/cosmos/ibc-go/v2/modules/core/02-client/types"
+	host "github.com/cosmos/ibc-go/v2/modules/core/24-host"
+	coretypes "github.com/cosmos/ibc-go/v2/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
 )
 

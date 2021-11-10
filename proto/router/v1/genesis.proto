@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package ibc.applications.router.v1;
 
-option go_package = "github.com/cosmos/ibc-go/modules/apps/router/types";
+option go_package = "github.com/cosmos/ibc-go/v2/modules/apps/router/types";
 
 import "gogoproto/gogo.proto";
 
