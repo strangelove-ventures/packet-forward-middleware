@@ -255,7 +255,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 			amount, ok := sdk.NewIntFromString(newData.Amount)
 			if !ok {
-				return channeltypes.NewErrorAcknowledgement("failed to construct int from fungile token packet data amount")
+				return channeltypes.NewErrorAcknowledgement("failed to construct int from fungible token packet data amount")
 			}
 
 			var token = sdk.NewCoin(denom, amount)
