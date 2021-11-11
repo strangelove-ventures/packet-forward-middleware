@@ -9,19 +9,18 @@ import "google/api/annotations.proto";
 option go_package = "github.com/strangelove-ventures/packet-forward-middleware/router/types";
 
 // Query provides defines the gRPC querier service.
-service QueryService {
+service Query {
   // Params queries all parameters of the router module.
-  rpc Params(ParamsRequest) returns (ParamsResponse) {
+  rpc Params(QueryParamsRequest) returns (QueryParamsResponse) {
     option (google.api.http).get = "/ibc/apps/router/v1/params";
   }
 }
 
 // QueryParamsRequest is the request type for the Query/Params RPC method.
-message ParamsRequest {}
+message QueryParamsRequest {}
 
 // QueryParamsResponse is the response type for the Query/Params RPC method.
-message ParamsResponse {
+message QueryParamsResponse {
   // params defines the parameters of the module.
   Params params = 1;
-  string test = 2;
 }
