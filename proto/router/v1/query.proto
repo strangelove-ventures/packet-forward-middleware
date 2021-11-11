@@ -1,12 +1,12 @@
 syntax = "proto3";
 
-package ibc.applications.router.v1;
+package router.v1;
 
 import "gogoproto/gogo.proto";
-import "ibc/applications/router/v1/genesis.proto";
+import "router/v1/genesis.proto";
 import "google/api/annotations.proto";
 
-option go_package = "github.com/cosmos/ibc-go/modules/apps/router/types";
+option go_package = "github.com/strangelove-ventures/packet-forward-middleware/router/types";
 
 // Query provides defines the gRPC querier service.
 service Query {
