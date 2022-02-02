@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/cobra"
 	abci "github.com/tendermint/tendermint/abci/types"
 
-	transfertypes "github.com/cosmos/ibc-go/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/modules/core/exported"
+	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
@@ -181,11 +181,11 @@ func (am AppModule) OnChanOpenInit(ctx sdk.Context, order channeltypes.Order, co
 }
 
 // OnChanOpenTry implements the IBCModule interface
-func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, connectionHops []string, portID, channelID string, chanCap *capabilitytypes.Capability, counterparty channeltypes.Counterparty, version, counterpartyVersion string,
-) error {
+func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, connectionHops []string, portID, channelID string, chanCap *capabilitytypes.Capability, counterparty channeltypes.Counterparty, counterpartyVersion string,
+) (version string, err error) {
 	// call underlying app's (transfer) callback
 	return am.app.OnChanOpenTry(ctx, order, connectionHops, portID, channelID,
-		chanCap, counterparty, version, counterpartyVersion)
+		chanCap, counterparty, counterpartyVersion)
 }
 
 // OnChanOpenAck implements the IBCModule interface
@@ -252,7 +252,11 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 			}
-			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(newData.Amount))
+			unit, err := sdk.ParseUint(newData.Amount)
+			if err != nil {
+				channeltypes.NewErrorAcknowledgement("cannot parse amount in fowrading information")
+			}
+			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 			if err := am.keeper.ForwardTransferPacket(ctx, receiver, token, port, channel, finalDest, []metrics.Label{}); err != nil {
 				ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
 			}
@@ -262,12 +266,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
-func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) (*sdk.Result, error) {
+func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
 	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 }
 
 // OnTimeoutPacket implements the IBCModule interface
-func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) (*sdk.Result, error) {
+func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress)  error {
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
 }
 
