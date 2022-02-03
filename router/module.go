@@ -253,7 +253,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 			}
 			unit, err := sdk.ParseUint(newData.Amount)
-			if err != nil {
+			if err != nil || &unit == nil {
 				channeltypes.NewErrorAcknowledgement("cannot parse amount in fowrading information")
 			}
 			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
