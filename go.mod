@@ -6,7 +6,7 @@ replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alp
 
 require (
 	github.com/armon/go-metrics v0.3.10
-	github.com/cosmos/cosmos-sdk v0.45.0
+	github.com/cosmos/cosmos-sdk v0.45.1
 	github.com/cosmos/ibc-go/v3 v3.0.0-alpha2
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang/protobuf v1.5.2
