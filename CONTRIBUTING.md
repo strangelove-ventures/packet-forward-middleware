@@ -52,7 +52,7 @@ taken place in a github issue, that PR runs a high likelihood of being rejected.
 Other notes:
 
 - Looking for a good place to start contributing? How about checking out some
-  [good first issues](https://github.com/cosmos/ibc-go/v3/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
+  [good first issues](https://github.com/cosmos/ibc-go/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22)
 - Please make sure to run `make format` before every commit - the easiest way
   to do this is have your editor run it for you upon saving a file. Additionally
   please ensure that your code is lint compliant by running `golangci-lint run`.
