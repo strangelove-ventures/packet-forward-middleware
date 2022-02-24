@@ -38,5 +38,5 @@ The following example shows routing from Terra to Osmosis through the Hub:
 # References
 
 - https://www.mintscan.io/cosmos/proposals/56
-- https://github.com/cosmos/ibc-go/v3/pull/373
+- https://github.com/cosmos/ibc-go/pull/373
 - https://github.com/strangelove-ventures/governance/blob/master/proposals/2021-09-hub-ibc-router/README.md
