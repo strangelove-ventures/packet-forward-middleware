@@ -19,7 +19,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 	abci "github.com/tendermint/tendermint/abci/types"
-
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
@@ -254,9 +253,10 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			}
 			unit, err := sdk.ParseUint(newData.Amount)
 			if err != nil || &unit == nil {
-				channeltypes.NewErrorAcknowledgement("cannot parse amount in fowrading information")
+				channeltypes.NewErrorAcknowledgement("cannot parse amount in forwarding information")
 			}
 			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
+
 			if err := am.keeper.ForwardTransferPacket(ctx, receiver, token, port, channel, finalDest, []metrics.Label{}); err != nil {
 				ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
 			}
@@ -273,6 +273,18 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress)  error {
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
+}
+
+// NegotiateAppVersion implements the IBCModue interface
+func (am AppModule) NegotiateAppVersion(
+	ctx sdk.Context,
+	order channeltypes.Order,
+	connectionID string,
+	portID string,
+	counterparty channeltypes.Counterparty,
+	proposedVersion string,
+) (string, error) {
+	return am.app.NegotiateAppVersion(ctx, order, connectionID, portID, counterparty, proposedVersion)
 }
 
 // For now this assumes one hop, should be better parsing
