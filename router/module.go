@@ -247,7 +247,10 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			// recalculate denom, skip checks that were already done in app.OnRecvPacket
 			var denom string
 			if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
+				fmt.Println(newData.Denom)
+				fmt.Println("IN RECEIVER CHAIN IS SRC")
 				denom = transfertypes.ParseDenomTrace(newData.Denom).IBCDenom()
+				fmt.Println(denom)
 			} else {
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
