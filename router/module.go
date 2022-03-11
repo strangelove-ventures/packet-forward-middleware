@@ -15,6 +15,8 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
+	"github.com/cosmos/ibc-go/v3/modules/apps/27-interchain-accounts/controller"
+	"github.com/cosmos/ibc-go/v3/modules/apps/27-interchain-accounts/host"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
@@ -30,8 +32,9 @@ import (
 
 var (
 	_ module.AppModule      = AppModule{}
-	_ porttypes.IBCModule   = AppModule{}
 	_ module.AppModuleBasic = AppModuleBasic{}
+	_ porttypes.IBCModule   = controller.IBCModule{}
+	_ porttypes.IBCModule = host.IBCModule{}
 )
 
 // AppModuleBasic is the router AppModuleBasic
@@ -188,8 +191,8 @@ func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, con
 }
 
 // OnChanOpenAck implements the IBCModule interface
-func (am AppModule) OnChanOpenAck(ctx sdk.Context, portID, channelID string, counterpartyVersion string) error {
-	return am.app.OnChanOpenAck(ctx, portID, channelID, counterpartyVersion)
+func (am AppModule) OnChanOpenAck(ctx sdk.Context, portID, channelID string, counterpartyChannelID string, counterpartyVersion string) error {
+	return am.app.OnChanOpenAck(ctx, portID, channelID, counterpartyChannelID, counterpartyVersion)
 }
 
 // OnChanOpenConfirm implements the IBCModule interface
