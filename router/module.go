@@ -252,8 +252,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				denom = transfertypes.ParseDenomTrace(newData.Denom).IBCDenom()
 				fmt.Println(denom)
 			} else {
+				fmt.Println(newData.Denom)
+				fmt.Println("IN OTHER CASE")
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
+				fmt.Println(prefixedDenom)
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
+				fmt.Println(denom)
 			}
 			amount, ok := sdk.NewIntFromString(newData.Amount)
 			if !ok {
