@@ -247,20 +247,25 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			// recalculate denom, skip checks that were already done in app.OnRecvPacket
 			var denom string
 			if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
-				fmt.Println(newData.Denom)
 				fmt.Println("IN RECEIVER CHAIN IS SRC")
+				fmt.Println("SENDER:      " + data.Sender)
+				fmt.Println("RECEIVER:       " + data.Receiver)
+				fmt.Println("DENOM" + newData.Denom)
 				voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
 				unprefixedDenom := newData.Denom[len(voucherPrefix):]
-				fmt.Println(unprefixedDenom)
+				fmt.Println("VOUCHER PREFIX:  " + voucherPrefix)
+				fmt.Println("UNPREFIXED DENOM:     " + unprefixedDenom)
 				denom = transfertypes.ParseDenomTrace(unprefixedDenom).IBCDenom()
-				fmt.Println(denom)
+				fmt.Println("DENOM:" + denom)
 			} else {
-				fmt.Println(newData.Denom)
 				fmt.Println("IN OTHER CASE")
+				fmt.Println("SENDER:      " + data.Sender)
+				fmt.Println("RECEIVER:       " + data.Receiver)
+				fmt.Println("DENOM" + newData.Denom)
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
-				fmt.Println(prefixedDenom)
+				fmt.Println("PREFIXED DENOM: " + prefixedDenom)
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
-				fmt.Println(denom)
+				fmt.Println("DENOM:" + denom)
 			}
 			amount, ok := sdk.NewIntFromString(newData.Amount)
 			if !ok {
