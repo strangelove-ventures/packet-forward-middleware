@@ -15,8 +15,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-	"github.com/cosmos/ibc-go/v3/modules/apps/27-interchain-accounts/controller"
-	"github.com/cosmos/ibc-go/v3/modules/apps/27-interchain-accounts/host"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
@@ -33,8 +31,7 @@ import (
 var (
 	_ module.AppModule      = AppModule{}
 	_ module.AppModuleBasic = AppModuleBasic{}
-	_ porttypes.IBCModule   = controller.IBCModule{}
-	_ porttypes.IBCModule = host.IBCModule{}
+	_ porttypes.IBCModule   = AppModule{}
 )
 
 // AppModuleBasic is the router AppModuleBasic
