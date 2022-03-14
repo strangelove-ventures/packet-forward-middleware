@@ -30,8 +30,8 @@ import (
 
 var (
 	_ module.AppModule      = AppModule{}
-	_ porttypes.IBCModule   = AppModule{}
 	_ module.AppModuleBasic = AppModuleBasic{}
+	_ porttypes.IBCModule   = AppModule{}
 )
 
 // AppModuleBasic is the router AppModuleBasic
@@ -188,8 +188,8 @@ func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, con
 }
 
 // OnChanOpenAck implements the IBCModule interface
-func (am AppModule) OnChanOpenAck(ctx sdk.Context, portID, channelID string, counterpartyVersion string) error {
-	return am.app.OnChanOpenAck(ctx, portID, channelID, counterpartyVersion)
+func (am AppModule) OnChanOpenAck(ctx sdk.Context, portID, channelID string, counterpartyChannelID string, counterpartyVersion string) error {
+	return am.app.OnChanOpenAck(ctx, portID, channelID, counterpartyChannelID, counterpartyVersion)
 }
 
 // OnChanOpenConfirm implements the IBCModule interface
