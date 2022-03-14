@@ -251,14 +251,17 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				fmt.Println("SENDER:      " + data.Sender)
 				fmt.Println("RECEIVER:       " + data.Receiver)
 				fmt.Println("DENOM:         " + newData.Denom)
+
 				voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
 				unprefixedDenom := newData.Denom[len(voucherPrefix):]
 
 				fmt.Println("VOUCHER PREFIX:  " + voucherPrefix)
 				fmt.Println("UNPREFIXED DENOM:     " + unprefixedDenom)
+
 				denom = unprefixedDenom
 				denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
 				fmt.Println("BASE DENOM TRACE:     " + denomTrace.BaseDenom)
+
 				if denomTrace.Path != "" {
 					denom = denomTrace.IBCDenom()
 				}
@@ -268,8 +271,10 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				fmt.Println("SENDER:      " + data.Sender)
 				fmt.Println("RECEIVER:       " + data.Receiver)
 				fmt.Println("DENOM:      " + newData.Denom)
+
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 				fmt.Println("PREFIXED DENOM: " + prefixedDenom)
+
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 				fmt.Println("DENOM:" + denom)
 			}

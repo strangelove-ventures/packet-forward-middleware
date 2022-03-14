@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -61,6 +62,11 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, receiver sdk.AccAddress, 
 	}
 
 	// send tokens to destination
+	fmt.Println("Port:     " + port)
+	fmt.Println("Channel:     " + channel)
+	fmt.Printf("Packet Coin: %v \n", packetCoin)
+	fmt.Println("Receiver:      " + receiver.String())
+	fmt.Println("Final Dst:    " + finalDest)
 	if err := k.transferKeeper.SendTransfer(ctx, port, channel, packetCoin, receiver, finalDest, clienttypes.Height{0, 0}, uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano())); err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
