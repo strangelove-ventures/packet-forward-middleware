@@ -26,5 +26,5 @@ Mgoogle/protobuf/any.proto=github.com/cosmos/cosmos-sdk/codec/types:. \
 done
 
 # move proto files to the right places
-cp -r github.com/strangelove-ventures/packet-forward-middleware/router/* router/
+cp -r github.com/strangelove-ventures/packet-forward-middleware/v2/router/* router/
 rm -rf github.com
