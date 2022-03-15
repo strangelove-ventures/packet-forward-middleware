@@ -217,6 +217,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		return channeltypes.NewErrorAcknowledgement("cannot unmarshal ICS-20 transfer packet data")
 	}
 
+	fmt.Println("INSIDE MIDDLEWARE ONRCVPACKET")
 	// parse out any forwarding info
 	receiver, finalDest, port, channel, err := ParseIncomingTransferField(data.Receiver)
 	switch {
