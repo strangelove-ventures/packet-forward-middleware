@@ -2,7 +2,7 @@ package test
 
 import (
 	"fmt"
-	"github.com/strangelove-ventures/packet-forward-middleware/router"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router"
 )
 
 func Fuzz(data []byte) int {

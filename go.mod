@@ -1,6 +1,6 @@
 go 1.17
 
-module github.com/strangelove-ventures/packet-forward-middleware
+module github.com/strangelove-ventures/packet-forward-middleware/v2
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
@@ -20,7 +20,7 @@ require (
 	github.com/cosmos/cosmos-sdk v0.45.1
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
 	github.com/cosmos/iavl v0.17.3 // indirect
-	github.com/cosmos/ibc-go/v3 v3.0.0-rc2
+	github.com/cosmos/ibc-go/v3 v3.0.0
 	github.com/cosmos/ledger-cosmos-go v0.11.1 // indirect
 	github.com/cosmos/ledger-go v0.9.2 // indirect
 	github.com/danieljoos/wincred v1.0.2 // indirect
