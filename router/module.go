@@ -246,7 +246,19 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			// recalculate denom, skip checks that were already done in app.OnRecvPacket
 			var denom string
 			if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
-				denom = transfertypes.ParseDenomTrace(newData.Denom).IBCDenom()
+				// remove prefix added by sender chain
+				voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
+				unprefixedDenom := newData.Denom[len(voucherPrefix):]
+
+				// coin denomination used in sending from the escrow address
+				denom = unprefixedDenom
+
+				// The denomination used to send the coins is either the native denom or the hash of the path
+				// if the denomination is not native.
+				denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
+				if denomTrace.Path != "" {
+					denom = denomTrace.IBCDenom()
+				}
 			} else {
 				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
