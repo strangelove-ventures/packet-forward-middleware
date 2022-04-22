@@ -14,6 +14,7 @@ import (
 	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 )
 
@@ -47,7 +48,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) ForwardTransferPacket(ctx sdk.Context, receiver sdk.AccAddress, token sdk.Coin, port, channel, finalDest string, labels []metrics.Label) error {
+func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTransfer, token sdk.Coin, labels []metrics.Label) error {
 	feeAmount := token.Amount.ToDec().Mul(k.GetFeePercentage(ctx)).RoundInt()
 	packetAmount := token.Amount.Sub(feeAmount)
 	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
@@ -55,13 +56,23 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, receiver sdk.AccAddress, 
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, receiver); err != nil {
+		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, transfer.ReceiverAddress); err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 
 	// send tokens to destination
-	if err := k.transferKeeper.SendTransfer(ctx, port, channel, packetCoin, receiver, finalDest, clienttypes.Height{0, 0}, uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano())); err != nil {
+	err := k.transferKeeper.SendTransfer(
+		ctx,
+		transfer.Port,
+		transfer.Channel,
+		packetCoin,
+		transfer.ReceiverAddress,
+		transfer.Channel,
+		clienttypes.Height{0, 0},
+		uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano()),
+	)
+	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
 

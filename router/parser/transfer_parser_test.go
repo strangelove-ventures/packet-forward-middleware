@@ -1,10 +1,17 @@
-package router
+package parser_test
 
 import (
 	"testing"
 
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/stretchr/testify/require"
 )
+
+func TestParseIncomingTransferField(t *testing.T) {
+	data := ""
+	_, err := parser.ParseReceiverData(data)
+	require.Error(t, err)
+}
 
 func TestParseIncomingTransferFieldErrors(t *testing.T) {
 	testCases := []struct {
@@ -12,6 +19,11 @@ func TestParseIncomingTransferFieldErrors(t *testing.T) {
 		data          string
 		errStartsWith string
 	}{
+		{
+			"unparsable transfer field",
+			"",
+			"unparsable receiver",
+		},
 		{
 			"unparsable transfer field",
 			"abc:def:",
@@ -48,7 +60,7 @@ func TestParseIncomingTransferFieldErrors(t *testing.T) {
 		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
-			_, _, _, _, err := ParseIncomingTransferField(tc.data)
+			_, err := parser.ParseReceiverData(tc.data)
 			require.Error(t, err)
 			require.Equal(t, err.Error()[:len(tc.errStartsWith)], tc.errStartsWith)
 		})

@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/test"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/test"
 	"github.com/stretchr/testify/require"
 )
 

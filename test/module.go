@@ -2,8 +2,8 @@ package test
 
 import (
 	ibcmock "github.com/cosmos/ibc-go/v3/testing/mock"
-	"github.com/strangelove-ventures/packet-forward-middleware/router"
-	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 )
 
 // AccAddress returns a random account address
