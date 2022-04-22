@@ -17,24 +17,27 @@ func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddre
 	case len(sep1) >= 2 && sep1[len(sep1)-1] != "":
 		finaldestination = strings.Join(sep1[1:], ":")
 	default:
-		return nil, "", "", "", fmt.Errorf("unparsable reciever field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
+		return nil, "", "", "", fmt.Errorf("unparsable receiver field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
 	}
+
 	sep2 := strings.Split(sep1[0], "|")
 	if len(sep2) != 2 {
-		err = fmt.Errorf("formatting incorect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
+		err = fmt.Errorf("formatting incorrect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
 		return
 	}
 	thischainaddr, err = sdk.AccAddressFromBech32(sep2[0])
 	if err != nil {
 		return
 	}
+
 	sep3 := strings.Split(sep2[1], "/")
 	if len(sep3) != 2 {
-		err = fmt.Errorf("formatting incorect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
+		err = fmt.Errorf("formatting incorrect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
 		return
 	}
 	port = sep3[0]
 	channel = sep3[1]
+
 	return
 }
 
