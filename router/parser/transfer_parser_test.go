@@ -7,13 +7,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseIncomingTransferField(t *testing.T) {
-	data := ""
-	_, err := parser.ParseReceiverData(data)
-	require.Error(t, err)
+func TestParseReceiverDataTransfer(t *testing.T) {
+	data := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
+	pt, err := parser.ParseReceiverData(data)
+
+	require.NoError(t, err)
+	require.True(t, pt.IsTransfer)
+	require.Equal(t, pt.ReceiverAddress.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.FinalDestination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	require.Equal(t, pt.Port, "transfer")
+	require.Equal(t, pt.Channel, "channel-0")
 }
 
-func TestParseIncomingTransferFieldErrors(t *testing.T) {
+func TestParseReceiverDataNoTransfer(t *testing.T) {
+	data := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
+	pt, err := parser.ParseReceiverData(data)
+
+	require.NoError(t, err)
+	require.False(t, pt.IsTransfer)
+	require.Equal(t, pt.ReceiverAddress.String(), "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+}
+
+func TestParseReceiverDataErrors(t *testing.T) {
 	testCases := []struct {
 		name          string
 		data          string

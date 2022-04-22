@@ -23,6 +23,7 @@ func NewTestKeepers() *TestKeepers {
 
 	paramsKeeper := initializer.paramsKeeper()
 	capabilityKeeper := initializer.capabilityKeeper()
+	portKeeper := newPortKeeperMock()
 	transferKeeper := newTransferKeeperMock()
 	distributionKeeper := newDistributionKeeperMock()
 
@@ -34,6 +35,7 @@ func NewTestKeepers() *TestKeepers {
 		CapabilityKeeper: capabilityKeeper,
 		RouterKeeper:     routerKeeper,
 
+		PortKeeperMock:         portKeeper,
 		TransferKeeperMock:     transferKeeper,
 		DistributionKeeperMock: distributionKeeper,
 	}
