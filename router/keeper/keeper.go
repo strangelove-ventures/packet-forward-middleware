@@ -69,7 +69,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTr
 		packetCoin,
 		transfer.ReceiverAddress,
 		transfer.Channel,
-		clienttypes.Height{0, 0},
+		clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
 		uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano()),
 	)
 	if err != nil {
