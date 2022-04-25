@@ -12,7 +12,7 @@ func TestParseReceiverDataTransfer(t *testing.T) {
 	pt, err := parser.ParseReceiverData(data)
 
 	require.NoError(t, err)
-	require.True(t, pt.IsTransfer)
+	require.True(t, pt.ShouldForward)
 	require.Equal(t, pt.ReceiverAddress.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
 	require.Equal(t, pt.FinalDestination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
@@ -24,7 +24,7 @@ func TestParseReceiverDataNoTransfer(t *testing.T) {
 	pt, err := parser.ParseReceiverData(data)
 
 	require.NoError(t, err)
-	require.False(t, pt.IsTransfer)
+	require.False(t, pt.ShouldForward)
 	require.Equal(t, pt.ReceiverAddress.String(), "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 }
 

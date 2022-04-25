@@ -7,8 +7,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-type ParsedTransfer struct {
-	IsTransfer bool
+type ParsedReceiver struct {
+	ShouldForward bool
 
 	ReceiverAddress  sdk.AccAddress
 	FinalDestination string
@@ -17,7 +17,7 @@ type ParsedTransfer struct {
 }
 
 // For now this assumes one hop, should be better parsing
-func ParseReceiverData(receiverData string) (*ParsedTransfer, error) {
+func ParseReceiverData(receiverData string) (*ParsedReceiver, error) {
 	sep1 := strings.Split(receiverData, ":")
 
 	// Standard address
@@ -27,8 +27,8 @@ func ParseReceiverData(receiverData string) (*ParsedTransfer, error) {
 			return nil, err
 		}
 
-		return &ParsedTransfer{
-			IsTransfer:      false,
+		return &ParsedReceiver{
+			ShouldForward:   false,
 			ReceiverAddress: thischainaddr,
 		}, nil
 	}
@@ -58,8 +58,8 @@ func ParseReceiverData(receiverData string) (*ParsedTransfer, error) {
 	port := sep3[0]
 	channel := sep3[1]
 
-	return &ParsedTransfer{
-		IsTransfer: true,
+	return &ParsedReceiver{
+		ShouldForward: true,
 
 		ReceiverAddress:  thischainaddr,
 		FinalDestination: finalDestination,

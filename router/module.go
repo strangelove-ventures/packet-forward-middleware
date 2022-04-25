@@ -218,18 +218,18 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	}
 
 	// parse out any forwarding info
-	parsedTransfer, err := parser.ParseReceiverData(data.Receiver)
+	parsedReceiver, err := parser.ParseReceiverData(data.Receiver)
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement("cannot parse packet forwarding information")
 	}
 
-	if !parsedTransfer.IsTransfer {
+	if !parsedReceiver.ShouldForward {
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
 	// Modify packet data to process packet transfer for this chain, omitting forwarding info
 	newData := data
-	newData.Receiver = parsedTransfer.ReceiverAddress.String()
+	newData.Receiver = parsedReceiver.ReceiverAddress.String()
 	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())
@@ -240,6 +240,8 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
 	if ack.Success() {
 		// recalculate denom, skip checks that were already done in app.OnRecvPacket
+		var err error
+		// TODO put denom handling in separate function
 		var denom string
 		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
 			// remove prefix added by sender chain
@@ -265,8 +267,9 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		}
 		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
-		if err := am.keeper.ForwardTransferPacket(ctx, parsedTransfer, token, []metrics.Label{}); err != nil {
-			ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
+		err = am.keeper.ForwardTransferPacket(ctx, parsedReceiver, token, []metrics.Label{})
+		if err != nil {
+			ack = channeltypes.NewErrorAcknowledgement("failed to forward transfer packet")
 		}
 	}
 	return ack

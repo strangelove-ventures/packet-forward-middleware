@@ -56,7 +56,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTransfer, token sdk.Coin, labels []metrics.Label) error {
+func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.ParsedReceiver, token sdk.Coin, labels []metrics.Label) error {
 	feeAmount := token.Amount.ToDec().Mul(k.GetFeePercentage(ctx)).RoundInt()
 	packetAmount := token.Amount.Sub(feeAmount)
 	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
@@ -64,7 +64,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTr
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, transfer.ReceiverAddress); err != nil {
+		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.ReceiverAddress); err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
@@ -72,11 +72,11 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTr
 	// send tokens to destination
 	err := k.transferKeeper.SendTransfer(
 		ctx,
-		transfer.Port,
-		transfer.Channel,
+		parsedReceiver.Port,
+		parsedReceiver.Channel,
 		packetCoin,
-		transfer.ReceiverAddress,
-		transfer.FinalDestination,
+		parsedReceiver.ReceiverAddress,
+		parsedReceiver.FinalDestination,
 		clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
 		TransferDefaultTimeout(ctx),
 	)
