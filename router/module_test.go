@@ -9,13 +9,14 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/test"
 	"github.com/stretchr/testify/require"
 )
 
 var (
 	testDenom  = "uatom"
-	testAmount = "1000000"
+	testAmount = "100"
 
 	testSourcePort         = "transfer"
 	testSourceChannel      = "channel-10"
@@ -23,16 +24,9 @@ var (
 	testDestinationChannel = "channel-11"
 )
 
-func ibcDenom(port, channel, denom string) string {
+func makeIBCDenom(port, channel, denom string) string {
 	prefixedDenom := transfertypes.GetDenomPrefix(port, channel) + denom
 	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
-}
-
-func testCoin(t *testing.T, denom string, amount string) sdk.Coin {
-	amt, err := sdk.ParseUint(amount)
-	require.NoError(t, err)
-
-	return sdk.NewCoin(denom, sdk.NewIntFromUint64(amt.Uint64()))
 }
 
 func emptyPacket() channeltypes.Packet {
@@ -64,15 +58,16 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
 	routerModule := setup.RouterModule
-	senderAddr := test.AccAddress()
+
+	// Test data
+	senderAccAddr := test.AccAddress()
 	packet := emptyPacket()
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAddr)
+	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
-
 	require.NoError(t, err)
 	require.Equal(t, "cannot unmarshal ICS-20 transfer packet data", expectedAck.GetError())
 }
@@ -84,15 +79,16 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
 	routerModule := setup.RouterModule
-	senderAddr := test.AccAddress()
+
+	// Test data
+	senderAccAddr := test.AccAddress()
 	packet := transferPacket(t, "")
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAddr)
+	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
-
 	require.NoError(t, err)
 	require.Equal(t, "cannot parse packet forwarding information", expectedAck.GetError())
 }
@@ -104,15 +100,18 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
 	routerModule := setup.RouterModule
-	senderAddr := test.AccAddress()
+
+	// Test data
+	senderAccAddr := test.AccAddress()
 	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 
+	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAddr)
+	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -128,16 +127,18 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
 	routerModule := setup.RouterModule
-	senderAddr := test.AccAddress()
+
+	senderAccAddr := test.AccAddress()
 	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 
+	// Expected mocks
 	gomock.InOrder(
 		// We return a failed OnRecvPacket
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
 			Return(channeltypes.NewErrorAcknowledgement("test")),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAddr)
+	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -146,7 +147,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	require.Equal(t, "test", string(expectedAck.GetError()))
 }
 
-func TestOnRecvPacket_Forward0Fee(t *testing.T) {
+func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	var err error
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
@@ -154,19 +155,22 @@ func TestOnRecvPacket_Forward0Fee(t *testing.T) {
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
 	routerModule := setup.RouterModule
-	senderAddr := test.AccAddress()
 
+	// Test data
 	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
 	destAddr := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
 	port := "transfer"
 	channel := "channel-0"
+	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
+	senderAccAddr := test.AccAddress()
+	hostAddrAcc := test.AccAddressFromBech32(t, hostAddr)
+	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
+	packetOrig := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
+	packetFw := transferPacket(t, hostAddr)
 
-	testCoin := testCoin(t, ibcDenom(testDestinationPort, testDestinationChannel, testDenom), testAmount)
-	packet0 := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
-	packet1 := transferPacket(t, hostAddr)
-
+	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet1, senderAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().SendTransfer(
@@ -174,14 +178,71 @@ func TestOnRecvPacket_Forward0Fee(t *testing.T) {
 			port,
 			channel,
 			testCoin,
-			test.AccAddressFromBech32(t, hostAddr),
+			hostAddrAcc,
 			destAddr,
 			clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
 			keeper.TransferDefaultTimeout(ctx),
 		).Return(nil),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet0, senderAddr)
+	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	require.True(t, ack.Success())
+
+	expectedAck := &channeltypes.Acknowledgement{}
+	err = cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	require.NoError(t, err)
+	require.Equal(t, "test", string(expectedAck.GetResult()))
+}
+
+func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
+	var err error
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	setup := test.NewTestSetup(t, ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	routerModule := setup.RouterModule
+
+	// Set fee param to 10%
+	setup.Keepers.RouterKeeper.SetParams(ctx, types.NewParams(sdk.NewDecWithPrec(10, 2)))
+
+	// Test data
+	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
+	destAddr := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
+	port := "transfer"
+	channel := "channel-0"
+	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
+	senderAccAddr := test.AccAddress()
+	hostAccAddr := test.AccAddressFromBech32(t, hostAddr)
+	testCoin := sdk.NewCoin(denom, sdk.NewInt(90))
+	feeCoins := sdk.Coins{sdk.NewCoin(denom, sdk.NewInt(10))}
+	packetOrig := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
+	packetFw := transferPacket(t, hostAddr)
+
+	// Expected mocks
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
+			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+
+		setup.Mocks.DistributionKeeperMock.EXPECT().FundCommunityPool(
+			ctx,
+			feeCoins,
+			hostAccAddr,
+		).Return(nil),
+
+		setup.Mocks.TransferKeeperMock.EXPECT().SendTransfer(
+			ctx,
+			port,
+			channel,
+			testCoin,
+			hostAccAddr,
+			destAddr,
+			clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
+			keeper.TransferDefaultTimeout(ctx),
+		).Return(nil),
+	)
+
+	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
