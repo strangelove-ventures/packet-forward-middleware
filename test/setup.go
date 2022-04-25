@@ -118,7 +118,6 @@ func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeep
 	return routerKeeper
 }
 
-// AccAddress returns a random account address
 func (i initializer) routerModule(routerKeeper keeper.Keeper, ibcModule porttypes.IBCModule) router.AppModule {
 	routerModule := router.NewAppModule(routerKeeper, ibcModule)
 
