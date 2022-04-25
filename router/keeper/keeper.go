@@ -28,6 +28,10 @@ type Keeper struct {
 	distrKeeper    types.DistributionKeeper
 }
 
+func TransferDefaultTimeout(ctx sdk.Context) uint64 {
+	return uint64(ctx.BlockTime().Add(30 * time.Minute).UnixNano())
+}
+
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec, key sdk.StoreKey, paramSpace paramtypes.Subspace,
@@ -72,9 +76,9 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, transfer *parser.ParsedTr
 		transfer.Channel,
 		packetCoin,
 		transfer.ReceiverAddress,
-		transfer.Channel,
+		transfer.FinalDestination,
 		clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
-		uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano()),
+		TransferDefaultTimeout(ctx),
 	)
 	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())

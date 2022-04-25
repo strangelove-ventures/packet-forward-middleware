@@ -1,6 +1,8 @@
 package test
 
 import (
+	"testing"
+
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store"
@@ -13,29 +15,33 @@ import (
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/test/mock"
+	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 )
 
-func NewTestSetup(ctl *gomock.Controller) *TestSetup {
+func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	initializer := newInitializer()
-
-	paramsKeeper := initializer.paramsKeeper()
 
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
 	distributionKeeperMock := mock.NewMockDistributionKeeper(ctl)
 	ibcModuleMock := mock.NewMockIBCModule(ctl)
 
+	paramsKeeper := initializer.paramsKeeper()
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, distributionKeeperMock)
 	routerModule := initializer.routerModule(routerKeeper, ibcModuleMock)
+
+	require.NoError(t, initializer.StateStore.LoadLatestVersion())
+
+	routerKeeper.SetParams(initializer.Ctx, types.DefaultParams())
 
 	return &TestSetup{
 		Initializer: initializer,
 
 		Keepers: &testKeepers{
-			ParamsKeeper: paramsKeeper,
-			RouterKeeper: routerKeeper,
+			ParamsKeeper: &paramsKeeper,
+			RouterKeeper: &routerKeeper,
 		},
 
 		Mocks: &testMocks{
@@ -58,8 +64,8 @@ type TestSetup struct {
 }
 
 type testKeepers struct {
-	ParamsKeeper paramskeeper.Keeper
-	RouterKeeper keeper.Keeper
+	ParamsKeeper *paramskeeper.Keeper
+	RouterKeeper *keeper.Keeper
 }
 
 type testMocks struct {
@@ -79,7 +85,7 @@ type initializer struct {
 // Create an initializer with in memory database and default codecs
 func newInitializer() initializer {
 	logger := log.TestingLogger()
-	logger.Debug("initializing test keepers")
+	logger.Debug("initializing test setup")
 
 	db := tmdb.NewMemDB()
 	stateStore := store.NewCommitMultiStore(db)
@@ -101,16 +107,17 @@ func newInitializer() initializer {
 func (i initializer) paramsKeeper() paramskeeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(paramstypes.StoreKey)
 	transientStoreKey := sdk.NewTransientStoreKey(paramstypes.TStoreKey)
-	paramsKeeper := paramskeeper.NewKeeper(i.Marshaler, i.Amino, storeKey, transientStoreKey)
-
 	i.StateStore.MountStoreWithDB(storeKey, sdk.StoreTypeIAVL, i.DB)
 	i.StateStore.MountStoreWithDB(transientStoreKey, sdk.StoreTypeTransient, i.DB)
+
+	paramsKeeper := paramskeeper.NewKeeper(i.Marshaler, i.Amino, storeKey, transientStoreKey)
 
 	return paramsKeeper
 }
 
 func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeeper types.TransferKeeper, distributionKeeper types.DistributionKeeper) keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
+	i.StateStore.MountStoreWithDB(storeKey, sdk.StoreTypeIAVL, i.DB)
 
 	subspace := paramsKeeper.Subspace(types.ModuleName)
 	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, distributionKeeper)
