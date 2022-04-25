@@ -229,7 +229,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	// Modify packet data to process packet transfer for this chain, omitting forwarding info
 	newData := data
-	newData.Receiver = parsedReceiver.ReceiverAddress.String()
+	newData.Receiver = parsedReceiver.HostAccAddr.String()
 	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())

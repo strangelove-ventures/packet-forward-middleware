@@ -64,7 +64,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.Pa
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.ReceiverAddress)
+		err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
 		if err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
@@ -76,8 +76,8 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.Pa
 		parsedReceiver.Port,
 		parsedReceiver.Channel,
 		packetCoin,
-		parsedReceiver.ReceiverAddress,
-		parsedReceiver.FinalDestination,
+		parsedReceiver.HostAccAddr,
+		parsedReceiver.Destination,
 		clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
 		TransferDefaultTimeout(ctx),
 	)

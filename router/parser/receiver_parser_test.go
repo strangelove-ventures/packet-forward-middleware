@@ -13,8 +13,8 @@ func TestParseReceiverDataTransfer(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pt.ShouldForward)
-	require.Equal(t, pt.ReceiverAddress.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
-	require.Equal(t, pt.FinalDestination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
 }
@@ -25,7 +25,6 @@ func TestParseReceiverDataNoTransfer(t *testing.T) {
 
 	require.NoError(t, err)
 	require.False(t, pt.ShouldForward)
-	require.Equal(t, pt.ReceiverAddress.String(), "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 }
 
 func TestParseReceiverDataErrors(t *testing.T) {
@@ -45,19 +44,9 @@ func TestParseReceiverDataErrors(t *testing.T) {
 			"unparsable receiver",
 		},
 		{
-			"incorrect format for transfer field",
-			"abc:def",
-			"formatting incorrect",
-		},
-		{
 			"missing pipe",
 			"transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
 			"formatting incorrect",
-		},
-		{
-			"invalid receiver address",
-			"somm16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
-			"decoding bech32 failed",
 		},
 		{
 			"invalid this chain address",
