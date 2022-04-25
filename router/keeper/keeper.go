@@ -33,6 +33,10 @@ func NewKeeper(
 	cdc codec.BinaryCodec, key sdk.StoreKey, paramSpace paramtypes.Subspace,
 	transferKeeper types.TransferKeeper, distrKeeper types.DistributionKeeper,
 ) Keeper {
+	// set KeyTable if it has not already been set
+	if !paramSpace.HasKeyTable() {
+		paramSpace = paramSpace.WithKeyTable(types.ParamKeyTable())
+	}
 
 	return Keeper{
 		cdc:            cdc,
