@@ -10,22 +10,24 @@ import (
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
+	"github.com/golang/mock/gomock"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/test/mock"
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
 	tmdb "github.com/tendermint/tm-db"
 )
 
-func NewTestKeepers() *TestKeepers {
+func NewTestKeepers(ctl *gomock.Controller) *TestKeepers {
 	initializer := newInitializer()
 
 	paramsKeeper := initializer.paramsKeeper()
 	capabilityKeeper := initializer.capabilityKeeper()
-	portKeeper := newPortKeeperMock()
-	transferKeeper := newTransferKeeperMock()
-	distributionKeeper := newDistributionKeeperMock()
+
+	portKeeper := mock.NewMockPortKeeper(ctl)
+	transferKeeper := mock.NewMockTransferKeeper(ctl)
+	distributionKeeper := mock.NewMockDistributionKeeper(ctl)
 
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeper, distributionKeeper)
 
@@ -48,9 +50,9 @@ type TestKeepers struct {
 	CapabilityKeeper capabilitykeeper.Keeper
 	RouterKeeper     keeper.Keeper
 
-	PortKeeperMock         PortKeeperMock
-	TransferKeeperMock     TransferKeeperMock
-	DistributionKeeperMock DistributionKeeperMock
+	PortKeeperMock         *mock.MockPortKeeper
+	TransferKeeperMock     *mock.MockTransferKeeper
+	DistributionKeeperMock *mock.MockDistributionKeeper
 }
 
 type initializer struct {
@@ -112,52 +114,4 @@ func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeep
 	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, distributionKeeper)
 
 	return routerKeeper
-}
-
-// TODO replace below mocks with real mocks (to dynamically provide behavior on the fly)
-
-type PortKeeperMock struct {
-	Calls map[string]int
-}
-
-func newPortKeeperMock() PortKeeperMock {
-	return PortKeeperMock{}
-}
-
-func (pk PortKeeperMock) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
-	pk.Calls["BindPort"]++
-	return capabilitytypes.NewCapability(0)
-}
-
-func (pk PortKeeperMock) IsBound(ctx sdk.Context, portID string) bool {
-	pk.Calls["IsBound"]++
-	return true
-}
-
-type TransferKeeperMock struct {
-	Calls map[string]int
-}
-
-func newTransferKeeperMock() TransferKeeperMock {
-	return TransferKeeperMock{}
-}
-
-func (tk TransferKeeperMock) SendTransfer(ctx sdk.Context, sourcePort, sourceChannel string, token sdk.Coin, sender sdk.AccAddress, receiver string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64) error {
-	tk.Calls["SendTransfer"]++
-
-	return nil
-}
-
-type DistributionKeeperMock struct {
-	Calls map[string]int
-}
-
-func newDistributionKeeperMock() DistributionKeeperMock {
-	return DistributionKeeperMock{}
-}
-
-func (dk DistributionKeeperMock) FundCommunityPool(ctx sdk.Context, amount sdk.Coins, sender sdk.AccAddress) error {
-	dk.Calls["FundCommunityPool"]++
-
-	return nil
 }
