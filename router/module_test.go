@@ -13,9 +13,10 @@ import (
 func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	keepers := test.NewTestKeepers(ctl)
-	routerModule := test.NewTestRouterModule(keepers)
-	ctx := keepers.Initializer.Ctx
+	setup := test.NewTestSetup(ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	routerModule := setup.RouterModule
 
 	var empty channeltypes.Packet
 
@@ -23,7 +24,7 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
-	err := keepers.Initializer.Marshaler.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 
 	require.NoError(t, err)
 	require.Equal(t, "cannot unmarshal ICS-20 transfer packet data", expectedAck.GetError())
@@ -32,9 +33,15 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 func TestOnRecvPacket_NoTransfer(t *testing.T) {
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
-	keepers := test.NewTestKeepers(ctl)
-	routerModule := test.NewTestRouterModule(keepers)
-	ctx := keepers.Initializer.Ctx
+	setup := test.NewTestSetup(ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	routerModule := setup.RouterModule
+
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+	)
 
 	transferPacket := transfertypes.FungibleTokenPacketData{
 		Receiver: "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
@@ -50,7 +57,7 @@ func TestOnRecvPacket_NoTransfer(t *testing.T) {
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
-	err = keepers.Initializer.Marshaler.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	err = cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 
 	require.NoError(t, err)
 	require.Equal(t, "test", string(expectedAck.GetResult()))

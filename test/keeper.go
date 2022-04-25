@@ -4,13 +4,12 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store"
-	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	capabilitykeeper "github.com/cosmos/cosmos-sdk/x/capability/keeper"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
 	"github.com/golang/mock/gomock"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/test/mock"
@@ -19,40 +18,54 @@ import (
 	tmdb "github.com/tendermint/tm-db"
 )
 
-func NewTestKeepers(ctl *gomock.Controller) *TestKeepers {
+func NewTestSetup(ctl *gomock.Controller) *TestSetup {
 	initializer := newInitializer()
 
 	paramsKeeper := initializer.paramsKeeper()
-	capabilityKeeper := initializer.capabilityKeeper()
 
-	portKeeper := mock.NewMockPortKeeper(ctl)
-	transferKeeper := mock.NewMockTransferKeeper(ctl)
-	distributionKeeper := mock.NewMockDistributionKeeper(ctl)
+	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
+	distributionKeeperMock := mock.NewMockDistributionKeeper(ctl)
+	ibcModuleMock := mock.NewMockIBCModule(ctl)
 
-	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeper, distributionKeeper)
+	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, distributionKeeperMock)
+	routerModule := initializer.routerModule(routerKeeper, ibcModuleMock)
 
-	return &TestKeepers{
-		Initializer:      initializer,
-		ParamsKeeper:     paramsKeeper,
-		CapabilityKeeper: capabilityKeeper,
-		RouterKeeper:     routerKeeper,
+	return &TestSetup{
+		Initializer: initializer,
 
-		PortKeeperMock:         portKeeper,
-		TransferKeeperMock:     transferKeeper,
-		DistributionKeeperMock: distributionKeeper,
+		Keepers: &testKeepers{
+			ParamsKeeper: paramsKeeper,
+			RouterKeeper: routerKeeper,
+		},
+
+		Mocks: &testMocks{
+			TransferKeeperMock:     transferKeeperMock,
+			DistributionKeeperMock: distributionKeeperMock,
+			IBCModuleMock:          ibcModuleMock,
+		},
+
+		RouterModule: &routerModule,
 	}
 }
 
-type TestKeepers struct {
+type TestSetup struct {
 	Initializer initializer
 
-	ParamsKeeper     paramskeeper.Keeper
-	CapabilityKeeper capabilitykeeper.Keeper
-	RouterKeeper     keeper.Keeper
+	Keepers *testKeepers
+	Mocks   *testMocks
 
-	PortKeeperMock         *mock.MockPortKeeper
+	RouterModule *router.AppModule
+}
+
+type testKeepers struct {
+	ParamsKeeper paramskeeper.Keeper
+	RouterKeeper keeper.Keeper
+}
+
+type testMocks struct {
 	TransferKeeperMock     *mock.MockTransferKeeper
 	DistributionKeeperMock *mock.MockDistributionKeeper
+	IBCModuleMock          *mock.MockIBCModule
 }
 
 type initializer struct {
@@ -96,17 +109,6 @@ func (i initializer) paramsKeeper() paramskeeper.Keeper {
 	return paramsKeeper
 }
 
-func (i initializer) capabilityKeeper() capabilitykeeper.Keeper {
-	storeKey := sdk.NewKVStoreKey(capabilitytypes.StoreKey)
-	memStoreKey := storetypes.NewMemoryStoreKey(capabilitytypes.MemStoreKey)
-	i.StateStore.MountStoreWithDB(storeKey, sdk.StoreTypeIAVL, i.DB)
-	i.StateStore.MountStoreWithDB(memStoreKey, sdk.StoreTypeMemory, nil)
-
-	capabilityKeeper := capabilitykeeper.NewKeeper(i.Marshaler, storeKey, memStoreKey)
-
-	return *capabilityKeeper
-}
-
 func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeeper types.TransferKeeper, distributionKeeper types.DistributionKeeper) keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
 
@@ -114,4 +116,11 @@ func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeep
 	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, distributionKeeper)
 
 	return routerKeeper
+}
+
+// AccAddress returns a random account address
+func (i initializer) routerModule(routerKeeper keeper.Keeper, ibcModule porttypes.IBCModule) router.AppModule {
+	routerModule := router.NewAppModule(routerKeeper, ibcModule)
+
+	return routerModule
 }

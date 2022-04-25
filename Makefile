@@ -144,7 +144,7 @@ cosmovisor:
 mocks: $(MOCKS_DIR)
 	mockgen -package=mock -destination=./test/mock/transfer_keeper.go $(GOMOD)/router/types TransferKeeper
 	mockgen -package=mock -destination=./test/mock/distribution_keeper.go $(GOMOD)/router/types DistributionKeeper
-	mockgen -package=mock -destination=./test/mock/port_keeper.go github.com/cosmos/ibc-go/v3/testing/mock PortKeeper
+	mockgen -package=mock -destination=./test/mock/ibc_module.go github.com/cosmos/ibc-go/v3/modules/core/05-port/types IBCModule
 
 .PHONY: mocks
 
