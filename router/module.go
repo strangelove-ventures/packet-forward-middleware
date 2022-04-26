@@ -22,9 +22,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	"github.com/strangelove-ventures/packet-forward-middleware/router/client/cli"
-	"github.com/strangelove-ventures/packet-forward-middleware/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/client/cli"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
 
