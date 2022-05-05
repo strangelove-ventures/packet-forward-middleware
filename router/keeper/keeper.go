@@ -1,8 +1,6 @@
 package keeper
 
 import (
-	"time"
-
 	"github.com/armon/go-metrics"
 	"github.com/tendermint/tendermint/libs/log"
 
@@ -11,6 +9,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
@@ -28,9 +27,12 @@ type Keeper struct {
 	distrKeeper    types.DistributionKeeper
 }
 
-func TransferDefaultTimeout(ctx sdk.Context) uint64 {
-	return uint64(ctx.BlockTime().Add(30 * time.Minute).UnixNano())
-}
+var (
+	// Timeout height following IBC defaults
+	DefaultTransferPacketTimeoutHeight = clienttypes.MustParseHeight(transfertypes.DefaultRelativePacketTimeoutHeight)
+	// Timeout timestamp following IBC defaults
+	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
+)
 
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
@@ -57,6 +59,7 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 }
 
 func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.ParsedReceiver, token sdk.Coin, labels []metrics.Label) error {
+	var err error
 	feeAmount := token.Amount.ToDec().Mul(k.GetFeePercentage(ctx)).RoundInt()
 	packetAmount := token.Amount.Sub(feeAmount)
 	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
@@ -64,22 +67,22 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.Pa
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
+		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
 		if err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 
 	// send tokens to destination
-	err := k.transferKeeper.SendTransfer(
+	err = k.transferKeeper.SendTransfer(
 		ctx,
 		parsedReceiver.Port,
 		parsedReceiver.Channel,
 		packetCoin,
 		parsedReceiver.HostAccAddr,
 		parsedReceiver.Destination,
-		clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
-		TransferDefaultTimeout(ctx),
+		DefaultTransferPacketTimeoutHeight,
+		DefaultTransferPacketTimeoutTimestamp,
 	)
 	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())

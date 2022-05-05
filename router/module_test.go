@@ -5,7 +5,6 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
@@ -180,8 +179,8 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 			testCoin,
 			hostAddrAcc,
 			destAddr,
-			clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
-			keeper.TransferDefaultTimeout(ctx),
+			keeper.DefaultTransferPacketTimeoutHeight,
+			keeper.DefaultTransferPacketTimeoutTimestamp,
 		).Return(nil),
 	)
 
@@ -237,8 +236,8 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			testCoin,
 			hostAccAddr,
 			destAddr,
-			clienttypes.Height{RevisionNumber: 0, RevisionHeight: 0},
-			keeper.TransferDefaultTimeout(ctx),
+			keeper.DefaultTransferPacketTimeoutHeight,
+			keeper.DefaultTransferPacketTimeoutTimestamp,
 		).Return(nil),
 	)
 
