@@ -1,8 +1,6 @@
 package keeper
 
 import (
-	"time"
-
 	"github.com/armon/go-metrics"
 	"github.com/tendermint/tendermint/libs/log"
 
@@ -11,9 +9,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 )
 
@@ -27,11 +27,22 @@ type Keeper struct {
 	distrKeeper    types.DistributionKeeper
 }
 
+var (
+	// Timeout height following IBC defaults
+	DefaultTransferPacketTimeoutHeight = clienttypes.MustParseHeight(transfertypes.DefaultRelativePacketTimeoutHeight)
+	// Timeout timestamp following IBC defaults
+	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
+)
+
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec, key sdk.StoreKey, paramSpace paramtypes.Subspace,
 	transferKeeper types.TransferKeeper, distrKeeper types.DistributionKeeper,
 ) Keeper {
+	// set KeyTable if it has not already been set
+	if !paramSpace.HasKeyTable() {
+		paramSpace = paramSpace.WithKeyTable(types.ParamKeyTable())
+	}
 
 	return Keeper{
 		cdc:            cdc,
@@ -47,7 +58,8 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) ForwardTransferPacket(ctx sdk.Context, receiver sdk.AccAddress, token sdk.Coin, port, channel, finalDest string, labels []metrics.Label) error {
+func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.ParsedReceiver, token sdk.Coin, labels []metrics.Label) error {
+	var err error
 	feeAmount := token.Amount.ToDec().Mul(k.GetFeePercentage(ctx)).RoundInt()
 	packetAmount := token.Amount.Sub(feeAmount)
 	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
@@ -55,13 +67,24 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, receiver sdk.AccAddress, 
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, receiver); err != nil {
+		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
+		if err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 
 	// send tokens to destination
-	if err := k.transferKeeper.SendTransfer(ctx, port, channel, packetCoin, receiver, finalDest, clienttypes.Height{0, 0}, uint64(ctx.BlockTime().Add(30*time.Minute).UnixNano())); err != nil {
+	err = k.transferKeeper.SendTransfer(
+		ctx,
+		parsedReceiver.Port,
+		parsedReceiver.Channel,
+		packetCoin,
+		parsedReceiver.HostAccAddr,
+		parsedReceiver.Destination,
+		DefaultTransferPacketTimeoutHeight,
+		DefaultTransferPacketTimeoutTimestamp,
+	)
+	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
 

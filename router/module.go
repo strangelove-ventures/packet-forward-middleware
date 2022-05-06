@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
-	"strings"
 
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/client"
@@ -24,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
@@ -218,63 +218,61 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	}
 
 	// parse out any forwarding info
-	receiver, finalDest, port, channel, err := ParseIncomingTransferField(data.Receiver)
-	switch {
-
-	// if this isn't a packet to forward, just use the transfer module normally
-	case finalDest == "" && port == "" && channel == "" && err == nil:
-		return am.app.OnRecvPacket(ctx, packet, relayer)
-
-	// If the parsing fails return a failure ack
-	case err != nil:
-		return channeltypes.NewErrorAcknowledgement("cannot parse packet fowrading information")
-
-	// Otherwise we have a packet to forward
-	default:
-		// Modify packet data to process packet transfer for this chain, omitting forwarding info
-		newData := data
-		newData.Receiver = receiver.String()
-		bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
-		if err != nil {
-			return channeltypes.NewErrorAcknowledgement(err.Error())
-		}
-		newPacket := packet
-		newPacket.Data = bz
-
-		ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
-		if ack.Success() {
-			// recalculate denom, skip checks that were already done in app.OnRecvPacket
-			var denom string
-			if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
-				// remove prefix added by sender chain
-				voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
-				unprefixedDenom := newData.Denom[len(voucherPrefix):]
-
-				// coin denomination used in sending from the escrow address
-				denom = unprefixedDenom
-
-				// The denomination used to send the coins is either the native denom or the hash of the path
-				// if the denomination is not native.
-				denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
-				if denomTrace.Path != "" {
-					denom = denomTrace.IBCDenom()
-				}
-			} else {
-				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
-				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
-			}
-			unit, err := sdk.ParseUint(newData.Amount)
-			if err != nil || &unit == nil {
-				channeltypes.NewErrorAcknowledgement("cannot parse amount in forwarding information")
-			}
-			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
-
-			if err := am.keeper.ForwardTransferPacket(ctx, receiver, token, port, channel, finalDest, []metrics.Label{}); err != nil {
-				ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
-			}
-		}
-		return ack
+	parsedReceiver, err := parser.ParseReceiverData(data.Receiver)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement("cannot parse packet forwarding information")
 	}
+
+	if !parsedReceiver.ShouldForward {
+		return am.app.OnRecvPacket(ctx, packet, relayer)
+	}
+
+	// Modify packet data to process packet transfer for this chain, omitting forwarding info
+	newData := data
+	newData.Receiver = parsedReceiver.HostAccAddr.String()
+	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(err.Error())
+	}
+	newPacket := packet
+	newPacket.Data = bz
+
+	ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
+	if ack.Success() {
+		// recalculate denom, skip checks that were already done in app.OnRecvPacket
+		var err error
+		// TODO put denom handling in separate function
+		var denom string
+		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
+			// remove prefix added by sender chain
+			voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
+			unprefixedDenom := newData.Denom[len(voucherPrefix):]
+
+			// coin denomination used in sending from the escrow address
+			denom = unprefixedDenom
+
+			// The denomination used to send the coins is either the native denom or the hash of the path
+			// if the denomination is not native.
+			denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
+			if denomTrace.Path != "" {
+				denom = denomTrace.IBCDenom()
+			}
+		} else {
+			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
+			denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
+		}
+		unit, err := sdk.ParseUint(newData.Amount)
+		if err != nil {
+			channeltypes.NewErrorAcknowledgement("cannot parse amount in forwarding information")
+		}
+		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
+
+		err = am.keeper.ForwardTransferPacket(ctx, parsedReceiver, token, []metrics.Label{})
+		if err != nil {
+			ack = channeltypes.NewErrorAcknowledgement("failed to forward transfer packet")
+		}
+	}
+	return ack
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
@@ -286,46 +284,3 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
 }
-
-// For now this assumes one hop, should be better parsing
-func ParseIncomingTransferField(receiverData string) (thischainaddr sdk.AccAddress, finaldestination, port, channel string, err error) {
-	sep1 := strings.Split(receiverData, ":")
-	switch {
-	case len(sep1) == 1 && sep1[0] != "":
-		thischainaddr, err = sdk.AccAddressFromBech32(receiverData)
-		return
-	case len(sep1) >= 2 && sep1[len(sep1)-1] != "":
-		finaldestination = strings.Join(sep1[1:], ":")
-	default:
-		return nil, "", "", "", fmt.Errorf("unparsable reciever field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
-	}
-	sep2 := strings.Split(sep1[0], "|")
-	if len(sep2) != 2 {
-		err = fmt.Errorf("formatting incorect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
-		return
-	}
-	thischainaddr, err = sdk.AccAddressFromBech32(sep2[0])
-	if err != nil {
-		return
-	}
-	sep3 := strings.Split(sep2[1], "/")
-	if len(sep3) != 2 {
-		err = fmt.Errorf("formatting incorect, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}', got: '%s'", receiverData)
-		return
-	}
-	port = sep3[0]
-	channel = sep3[1]
-	return
-}
-
-// sending chain reviecer field
-// cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0: cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
-
-// first proxy chain reviever field
-// cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
-
-// second proxy chain reviever field
-// somm16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
-
-// final proxy chain reciever field
-// cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k
