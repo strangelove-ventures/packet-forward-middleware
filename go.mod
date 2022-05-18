@@ -4,12 +4,10 @@ module github.com/strangelove-ventures/packet-forward-middleware/v2
 
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
-replace github.com/cosmos/ibc-go/v3 => github.com/oopcode/ibc-go/v3 v3.0.0-alpha1.0.20220504143452-d28987a096f9
-
 require (
 	github.com/armon/go-metrics v0.3.10
 	github.com/cosmos/cosmos-sdk v0.46.0-beta2.0.20220418184507-c53157dd63f6
-	github.com/cosmos/ibc-go/v3 v3.0.0
+	github.com/cosmos/ibc-go/v3 v3.0.0-alpha1.0.20220517190049-c4ce2b908a1e
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
