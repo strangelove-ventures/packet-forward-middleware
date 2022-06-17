@@ -5,6 +5,7 @@ module github.com/strangelove-ventures/packet-forward-middleware/v2
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 require (
+	cosmossdk.io/math v1.0.0-beta.2
 	github.com/armon/go-metrics v0.3.11
 	github.com/cosmos/cosmos-sdk v0.46.0-rc1
 	github.com/cosmos/ibc-go/v3 v3.0.0-alpha1.0.20220607104611-5f1c30745558
@@ -23,7 +24,6 @@ require (
 
 require (
 	cosmossdk.io/errors v1.0.0-beta.6 // indirect
-	cosmossdk.io/math v1.0.0-beta.2 // indirect
 	filippo.io/edwards25519 v1.0.0-rc.1 // indirect
 	github.com/99designs/keyring v1.1.6 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
