@@ -83,7 +83,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, parsedReceiver *parser.Pa
 		parsedReceiver.HostAccAddr,
 		parsedReceiver.Destination,
 		DefaultTransferPacketTimeoutHeight,
-		DefaultTransferPacketTimeoutTimestamp,
+		DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
 	if err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
