@@ -181,7 +181,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 			hostAddrAcc,
 			destAddr,
 			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp,
+			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 		).Return(nil),
 	)
 
@@ -238,7 +238,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			hostAccAddr,
 			destAddr,
 			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp,
+			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 		).Return(nil),
 	)
 
