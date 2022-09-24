@@ -40,7 +40,7 @@ func TestParseReceiverDataErrors(t *testing.T) {
 		},
 		{
 			"unparsable transfer field",
-			"abc:def:",
+			"abc:",
 			"unparsable receiver",
 		},
 		{
@@ -57,6 +57,11 @@ func TestParseReceiverDataErrors(t *testing.T) {
 			"missing slash",
 			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
 			"formatting incorrect",
+		},
+		{
+			"invalid max retries",
+			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:abc",
+			"unparsable retries",
 		},
 	}
 

@@ -36,11 +36,12 @@ func (m *MockTransferKeeper) EXPECT() *MockTransferKeeperMockRecorder {
 }
 
 // SendTransfer mocks base method.
-func (m *MockTransferKeeper) SendTransfer(arg0 types.Context, arg1, arg2 string, arg3 types.Coin, arg4 types.AccAddress, arg5 string, arg6 types0.Height, arg7 uint64) error {
+func (m *MockTransferKeeper) SendTransfer(arg0 types.Context, arg1, arg2 string, arg3 types.Coin, arg4 types.AccAddress, arg5 string, arg6 types0.Height, arg7 uint64) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendTransfer", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // SendTransfer indicates an expected call of SendTransfer.
