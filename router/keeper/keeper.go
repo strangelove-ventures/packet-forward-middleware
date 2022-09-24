@@ -78,7 +78,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	}
 
 	// send tokens to destination
-	sequence, err := k.transferKeeper.SendTransfer(
+	sequence, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
 		parsedReceiver.Port,
 		parsedReceiver.Channel,
@@ -195,7 +195,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 
 	var token = sdk.NewCoin(data.Denom, amount)
 
-	_, err := k.transferKeeper.SendTransfer(
+	_, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
 		inFlightPacket.RefundPortId,
 		inFlightPacket.RefundChannelId,
