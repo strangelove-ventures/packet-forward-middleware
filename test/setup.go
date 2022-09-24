@@ -10,7 +10,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	porttypes "github.com/cosmos/ibc-go/v5/modules/core/05-port/types"
+	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
 	"github.com/golang/mock/gomock"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"

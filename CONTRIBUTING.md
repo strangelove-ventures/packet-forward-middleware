@@ -22,8 +22,8 @@ Contributing to this repo can mean many things such as participating in
 discussion or proposing code changes. To ensure a smooth workflow for all
 contributors, the general procedure for contributing has been established:
 
-1. Either [open](https://github.com/cosmos/ibc-go/v5/issues/new/choose) or
-   [find](https://github.com/cosmos/ibc-go/v5/issues) an issue you'd like to help with
+1. Either [open](https://github.com/cosmos/ibc-go/v3/issues/new/choose) or
+   [find](https://github.com/cosmos/ibc-go/v3/issues) an issue you'd like to help with
 2. Participate in thoughtful discussion on that issue
 3. If you would like to contribute:
    1. If the issue is a proposal, ensure that the proposal has been accepted

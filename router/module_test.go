@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
+	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
@@ -69,7 +69,7 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 	require.NoError(t, err)
-	require.Equal(t, "ABCI code: 1: error handling packet: see events for details", expectedAck.GetError())
+	require.Equal(t, "EOF", expectedAck.GetError())
 }
 
 func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
@@ -90,7 +90,7 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 	require.NoError(t, err)
-	require.Equal(t, "ABCI code: 1: error handling packet: see events for details", expectedAck.GetError())
+	require.Equal(t, "unparsable receiver field, need: '{address_on_this_chain}|{portid}/{channelid}:{final_dest_address}(:{max_retries})?', got: ''", expectedAck.GetError())
 }
 
 func TestOnRecvPacket_NoForward(t *testing.T) {
@@ -135,7 +135,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	gomock.InOrder(
 		// We return a failed OnRecvPacket
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
-			Return(channeltypes.NewErrorAcknowledgement(fmt.Errorf("test"))),
+			Return(channeltypes.NewErrorAcknowledgement(fmt.Errorf("test").Error())),
 	)
 
 	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
@@ -144,7 +144,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 	require.NoError(t, err)
-	require.Equal(t, "ABCI code: 1: error handling packet: see events for details", expectedAck.GetError())
+	require.Equal(t, "test", expectedAck.GetError())
 }
 
 func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
