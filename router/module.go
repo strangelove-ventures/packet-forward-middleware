@@ -225,6 +225,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	}
 
 	if !parsedReceiver.ShouldForward {
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware shouldn't forward packet",
+			"sender", data.Sender,
+			"receiver", data.Receiver,
+			"amount", data.Amount,
+			"denom", data.Denom,
+		)
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 

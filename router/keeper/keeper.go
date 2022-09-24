@@ -77,6 +77,15 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		}
 	}
 
+	k.Logger(ctx).Debug("packetForwardMiddleware calling SendPacketTransfer",
+		"amount", packetCoin.Amount.String(),
+		"denom", packetCoin.Denom,
+		"sender", parsedReceiver.HostAccAddr,
+		"receiver", parsedReceiver.Destination,
+		"port", parsedReceiver.Port,
+		"channel", parsedReceiver.Channel,
+	)
+
 	// send tokens to destination
 	sequence, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
@@ -168,6 +177,15 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 
 	var token = sdk.NewCoin(data.Denom, amount)
 
+	k.Logger(ctx).Debug("packetForwardMiddleware HandleTimeout calling SendPacketTransfer",
+		"amount", data.Amount,
+		"denom", data.Denom,
+		"sender", data.Sender,
+		"receiver", data.Receiver,
+		"port", packet.SourcePort,
+		"channel", packet.SourceChannel,
+	)
+
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
 
@@ -194,6 +212,15 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 	}
 
 	var token = sdk.NewCoin(data.Denom, amount)
+
+	k.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket",
+		"amount", token.Amount.String(),
+		"denom", token.Denom,
+		"sender", relayer,
+		"receiver", inFlightPacket.OriginalSenderAddress,
+		"port", inFlightPacket.RefundPortId,
+		"channel", inFlightPacket.RefundChannelId,
+	)
 
 	_, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
