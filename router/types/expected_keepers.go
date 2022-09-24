@@ -7,7 +7,7 @@ import (
 
 // TransferKeeper defines the expected transfer keeper
 type TransferKeeper interface {
-	SendTransfer(ctx sdk.Context, sourcePort, sourceChannel string, token sdk.Coin, sender sdk.AccAddress, receiver string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64) error
+	SendTransfer(ctx sdk.Context, sourcePort, sourceChannel string, token sdk.Coin, sender sdk.AccAddress, receiver string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64) (uint64, error)
 }
 
 // DistributionKeeper defines the expected distribution keeper

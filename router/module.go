@@ -285,12 +285,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			}
 			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
-			if err := am.keeper.ForwardTransferPacket(ctx, receiver, token, port, channel, finalDest, []metrics.Label{}); err != nil {
-				ack = channeltypes.NewErrorAcknowledgement("failed to foward transfer packet")
-			}
+		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, []metrics.Label{})
+		if err != nil {
+			ack = channeltypes.NewErrorAcknowledgement(err)
 		}
 		return ack
-	}
+	} 
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
@@ -300,6 +300,12 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
+	if err := am.keeper.HandleTimeout(ctx, packet, relayer); err != nil {
+		if err := am.keeper.RefundForwardedPacket(ctx, packet, relayer); err != nil {
+			return err
+		}
+	}
+
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
 }
 
