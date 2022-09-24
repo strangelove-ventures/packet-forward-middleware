@@ -12,6 +12,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
@@ -28,6 +29,13 @@ type Keeper struct {
 	transferKeeper types.TransferKeeper
 	distrKeeper    types.DistributionKeeper
 }
+
+var (
+	// Timeout height following IBC defaults
+	DefaultTransferPacketTimeoutHeight = clienttypes.MustParseHeight(transfertypes.DefaultRelativePacketTimeoutHeight)
+	// Timeout timestamp following IBC defaults
+	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
+)
 
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
@@ -58,7 +66,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, receiver); err != nil {
+		if err := k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr); err != nil {
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}

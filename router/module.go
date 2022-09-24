@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"strings"
 
+	"cosmossdk.io/math"
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -24,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
@@ -214,83 +216,65 @@ func (am AppModule) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string
 func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) ibcexported.Acknowledgement {
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		return channeltypes.NewErrorAcknowledgement("cannot unmarshal ICS-20 transfer packet data")
+		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	fmt.Println("INSIDE MIDDLEWARE ONRCVPACKET")
 	// parse out any forwarding info
-	receiver, finalDest, port, channel, err := ParseIncomingTransferField(data.Receiver)
-	switch {
+	parsedReceiver, err := parser.ParseReceiverData(data.Receiver)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(err.Error())
+	}
 
-	// if this isn't a packet to forward, just use the transfer module normally
-	case finalDest == "" && port == "" && channel == "" && err == nil:
+	if !parsedReceiver.ShouldForward {
 		return am.app.OnRecvPacket(ctx, packet, relayer)
+	}
 
-	// If the parsing fails return a failure ack
-	case err != nil:
-		return channeltypes.NewErrorAcknowledgement("cannot parse packet fowrading information")
+	// Modify packet data to process packet transfer for this chain, omitting forwarding info
+	newData := data
+	newData.Receiver = parsedReceiver.HostAccAddr.String()
+	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(err.Error())
+	}
+	newPacket := packet
+	newPacket.Data = bz
 
-	// Otherwise we have a packet to forward
-	default:
-		// Modify packet data to process packet transfer for this chain, omitting forwarding info
-		newData := data
-		newData.Receiver = receiver.String()
-		bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
-		if err != nil {
-			return channeltypes.NewErrorAcknowledgement(err.Error())
+	ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
+	if ack.Success() {
+		// recalculate denom, skip checks that were already done in app.OnRecvPacket
+		var err error
+		// TODO put denom handling in separate function
+		var denom string
+		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
+			// remove prefix added by sender chain
+			voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
+			unprefixedDenom := newData.Denom[len(voucherPrefix):]
+
+			// coin denomination used in sending from the escrow address
+			denom = unprefixedDenom
+
+			// The denomination used to send the coins is either the native denom or the hash of the path
+			// if the denomination is not native.
+			denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
+			if denomTrace.Path != "" {
+				denom = denomTrace.IBCDenom()
+			}
+		} else {
+			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
+			denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 		}
-		newPacket := packet
-		newPacket.Data = bz
-
-		ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
-		if ack.Success() {
-			// recalculate denom, skip checks that were already done in app.OnRecvPacket
-			var denom string
-			if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
-				voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
-				unprefixedDenom := newData.Denom[len(voucherPrefix):]
-
-				// coin denomination used in sending from the escrow address
-				denom = unprefixedDenom
-
-				// The denomination used to send the coins is either the native denom or the hash of the path
-				// if the denomination is not native.
-				denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
-				if denomTrace.Path != "" {
-					denom = denomTrace.IBCDenom()
-				}
-
-				fmt.Println("----------------------------")
-				fmt.Println("IN RECEIVER CHAIN IS SRC")
-				fmt.Println("SENDER:      " + data.Sender)
-				fmt.Println("RECEIVER:       " + data.Receiver)
-				fmt.Println("DENOM:         " + newData.Denom)
-				fmt.Println("----------------------------")
-			} else {
-				prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
-				denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
-
-				fmt.Println("----------------------------")
-				fmt.Println("IN OTHER CASE")
-				fmt.Println("SENDER:      " + data.Sender)
-				fmt.Println("RECEIVER:       " + data.Receiver)
-				fmt.Println("DENOM:      " + newData.Denom)
-				fmt.Println("PREFIXED DENOM:    " + prefixedDenom)
-				fmt.Println("DENOM:" + denom)
-				fmt.Println("----------------------------")
-			}
-			unit, err := sdk.ParseUint(newData.Amount)
-			if err != nil || &unit == nil {
-				channeltypes.NewErrorAcknowledgement("cannot parse amount in forwarding information")
-			}
-			var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
+		unit, err := math.ParseUint(newData.Amount)
+		if err != nil {
+			channeltypes.NewErrorAcknowledgement(err.Error())
+		}
+		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
 		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, []metrics.Label{})
 		if err != nil {
-			ack = channeltypes.NewErrorAcknowledgement(err)
+			ack = channeltypes.NewErrorAcknowledgement(err.Error())
 		}
-		return ack
-	} 
+	}
+	return ack
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
