@@ -280,8 +280,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 // OnAcknowledgementPacket implements the IBCModule interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
 	if err := am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer); err != nil {
-		am.keeper.RefundForwardedPacket(ctx, packet)
 		return err
+	}
+
+	var ackErr channeltypes.Acknowledgement_Error
+	if err := json.Unmarshal(acknowledgement, &ackErr); err == nil && len(ackErr.Error) > 0 {
+		am.keeper.RefundForwardedPacket(ctx, packet)
 	}
 
 	return nil
