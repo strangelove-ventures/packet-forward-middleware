@@ -98,6 +98,16 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
 	if err != nil {
+		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",
+			"error", err,
+			"amount", packetCoin.Amount.String(),
+			"denom", packetCoin.Denom,
+			"sender", parsedReceiver.HostAccAddr,
+			"receiver", parsedReceiver.Destination,
+			"port", parsedReceiver.Port,
+			"channel", parsedReceiver.Channel,
+		)
+
 		// TODO refund to src chain
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
