@@ -28,7 +28,6 @@ message InFlightPacket {
   string original_sender_address = 1;
   string refund_channel_id = 2;
   string refund_port_id = 3;
-  int32 retries = 4;
-  int32 max_retries = 5;
-  uint64 timeout = 6;
+  int32 retries_remaining = 4; 
+  uint64 timeout = 5;
 }

@@ -12,12 +12,12 @@ import (
 type ParsedReceiver struct {
 	ShouldForward bool
 
-	HostAccAddr sdk.AccAddress
-	Destination string
-	Port        string
-	Channel     string
-	MaxRetries  uint8
-	Timeout     time.Duration
+	HostAccAddr      sdk.AccAddress
+	Destination      string
+	Port             string
+	Channel          string
+	RetriesRemaining uint8
+	Timeout          time.Duration
 }
 
 // For now this assumes one hop, should be better parsing
@@ -76,12 +76,12 @@ func ParseReceiverData(receiverData string) (*ParsedReceiver, error) {
 	return &ParsedReceiver{
 		ShouldForward: true,
 
-		HostAccAddr: hostAccAddr,
-		Destination: dest,
-		Port:        port,
-		Channel:     channel,
-		MaxRetries:  retries,
-		Timeout:     timeout,
+		HostAccAddr:      hostAccAddr,
+		Destination:      dest,
+		Port:             port,
+		Channel:          channel,
+		RetriesRemaining: retries,
+		Timeout:          timeout,
 	}, nil
 }
 

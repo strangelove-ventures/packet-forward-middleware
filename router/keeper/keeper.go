@@ -133,12 +133,11 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 			OriginalSenderAddress: srcPacketSender,
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
-			Retries:               0,
-			MaxRetries:            int32(parsedReceiver.MaxRetries),
+			RetriesRemaining:      int32(parsedReceiver.RetriesRemaining),
 			Timeout:               timeoutTimestamp,
 		}
 	} else {
-		inFlightPacket.Retries++
+		inFlightPacket.RetriesRemaining--
 	}
 
 	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence)
@@ -175,16 +174,15 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 
-	if inFlightPacket.Retries >= inFlightPacket.MaxRetries {
+	if inFlightPacket.RetriesRemaining <= 0 {
 		k.Logger(ctx).Error("packetForwardMiddleware reached max retries for packet",
 			"key", string(key),
 			"original-sender-address", inFlightPacket.OriginalSenderAddress,
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
-			"max-retries", inFlightPacket.MaxRetries,
 		)
-		return fmt.Errorf("giving up on packet on channel (%s) port (%s) after max retries: (%d)",
-			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.MaxRetries)
+		return fmt.Errorf("giving up on packet on channel (%s) port (%s) after max retries",
+			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId)
 	}
 
 	// Parse packet data
@@ -195,7 +193,7 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 			"original-sender-address", inFlightPacket.OriginalSenderAddress,
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
-			"max-retries", inFlightPacket.MaxRetries,
+			"retries-remaining", inFlightPacket.RetriesRemaining,
 			"error", err,
 		)
 		return fmt.Errorf("error unmarshalling packet data: %w", err)
@@ -203,11 +201,11 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 
 	// send transfer again
 	receiver := &parser.ParsedReceiver{
-		HostAccAddr: sdk.MustAccAddressFromBech32(data.Sender),
-		Destination: data.Receiver,
-		Channel:     packet.SourceChannel,
-		Port:        packet.SourcePort,
-		MaxRetries:  uint8(inFlightPacket.MaxRetries),
+		HostAccAddr:      sdk.MustAccAddressFromBech32(data.Sender),
+		Destination:      data.Receiver,
+		Channel:          packet.SourceChannel,
+		Port:             packet.SourcePort,
+		RetriesRemaining: uint8(inFlightPacket.RetriesRemaining),
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -217,7 +215,7 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 			"original-sender-address", inFlightPacket.OriginalSenderAddress,
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
-			"max-retries", inFlightPacket.MaxRetries,
+			"retries-remaining", inFlightPacket.RetriesRemaining,
 			"amount", data.Amount,
 		)
 		return fmt.Errorf("error parsing amount from string for router retry: %s", data.Amount)
