@@ -33,7 +33,10 @@ type Keeper struct {
 
 var (
 	// Timeout height following IBC defaults
-	DefaultTransferPacketTimeoutHeight = clienttypes.MustParseHeight(transfertypes.DefaultRelativePacketTimeoutHeight)
+	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
+		RevisionNumber: 0,
+		RevisionHeight: 0,
+	}
 	// Timeout timestamp following IBC defaults
 	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
 )
