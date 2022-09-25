@@ -228,6 +228,18 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
 
+func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
+	store := ctx.KVStore(k.storeKey)
+	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
+	if !store.Has(key) {
+		// not a forwarded packet, ignore.
+		return
+	}
+
+	// done with packet key now, delete.
+	store.Delete(key)
+}
+
 func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)

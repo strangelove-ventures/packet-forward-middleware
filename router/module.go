@@ -286,6 +286,8 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 	var ackErr channeltypes.Acknowledgement_Error
 	if err := json.Unmarshal(acknowledgement, &ackErr); err == nil && len(ackErr.Error) > 0 {
 		am.keeper.RefundForwardedPacket(ctx, packet)
+	} else {
+		am.keeper.RemoveInFlightPacket(ctx, packet)
 	}
 
 	return nil
