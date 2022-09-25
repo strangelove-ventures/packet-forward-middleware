@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"cosmossdk.io/math"
 	"github.com/armon/go-metrics"
@@ -88,13 +89,26 @@ type AppModule struct {
 	AppModuleBasic
 	keeper keeper.Keeper
 	app    porttypes.IBCModule
+
+	retriesOnTimeout uint8
+	forwardTimeout   time.Duration
+	refundTimeout    time.Duration
 }
 
 // NewAppModule creates a new router module
-func NewAppModule(k keeper.Keeper, app porttypes.IBCModule) AppModule {
+func NewAppModule(
+	k keeper.Keeper,
+	app porttypes.IBCModule,
+	retriesOnTimeout uint8,
+	forwardTimeout time.Duration,
+	refundTimeout time.Duration,
+) AppModule {
 	return AppModule{
-		keeper: k,
-		app:    app,
+		keeper:           k,
+		app:              app,
+		retriesOnTimeout: retriesOnTimeout,
+		forwardTimeout:   forwardTimeout,
+		refundTimeout:    refundTimeout,
 	}
 }
 
@@ -268,9 +282,9 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		}
 		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
-		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, []metrics.Label{})
+		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, am.retriesOnTimeout, am.forwardTimeout, []metrics.Label{})
 		if err != nil {
-			am.keeper.RefundForwardedPacket(ctx, packet)
+			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 			ack = channeltypes.NewErrorAcknowledgement(err)
 		}
 	}
@@ -285,7 +299,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 	var ackErr channeltypes.Acknowledgement_Error
 	if err := json.Unmarshal(acknowledgement, &ackErr); err == nil && len(ackErr.Error) > 0 {
-		am.keeper.RefundForwardedPacket(ctx, packet)
+		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 	} else {
 		am.keeper.RemoveInFlightPacket(ctx, packet)
 	}
@@ -299,8 +313,8 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 		return err
 	}
 
-	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
-		am.keeper.RefundForwardedPacket(ctx, packet)
+	if err := am.keeper.HandleTimeout(ctx, packet, am.retriesOnTimeout, am.forwardTimeout); err != nil {
+		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 	}
 
 	return nil

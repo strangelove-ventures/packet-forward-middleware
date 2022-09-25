@@ -17,8 +17,6 @@ func TestParseReceiverDataTransfer(t *testing.T) {
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
-	require.Equal(t, pt.RetriesRemaining, uint8(0))
-	require.Equal(t, pt.Timeout.Nanoseconds(), int64(0))
 }
 
 func TestParseReceiverWithRetries(t *testing.T) {
@@ -31,8 +29,6 @@ func TestParseReceiverWithRetries(t *testing.T) {
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
-	require.Equal(t, pt.RetriesRemaining, uint8(4))
-	require.Equal(t, pt.Timeout.Nanoseconds(), int64(0))
 }
 
 func TestParseReceiverWithRetriesAndTimeout(t *testing.T) {
@@ -45,8 +41,6 @@ func TestParseReceiverWithRetriesAndTimeout(t *testing.T) {
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
-	require.Equal(t, pt.RetriesRemaining, uint8(4))
-	require.Equal(t, pt.Timeout.Seconds(), float64(10))
 }
 
 func TestParseReceiverDataNoTransfer(t *testing.T) {
@@ -87,16 +81,6 @@ func TestParseReceiverDataErrors(t *testing.T) {
 			"missing slash",
 			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
 			"formatting incorrect",
-		},
-		{
-			"invalid max retries",
-			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:abc",
-			"unparsable retries",
-		},
-		{
-			"invalid timeout timestamp",
-			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:4:abc",
-			"unparsable timeout",
 		},
 	}
 

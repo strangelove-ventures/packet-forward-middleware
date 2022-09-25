@@ -173,7 +173,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 
-		setup.Mocks.TransferKeeperMock.EXPECT().SendPacketTransfer(
+		setup.Mocks.TransferKeeperMock.EXPECT().SendTransferWithResult(
 			ctx,
 			port,
 			channel,
@@ -181,8 +181,8 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 			hostAddrAcc,
 			destAddr,
 			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
-		).Return(uint64(0), nil),
+			uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+		).Return(channeltypes.Packet{}, nil),
 	)
 
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
@@ -230,7 +230,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			hostAccAddr,
 		).Return(nil),
 
-		setup.Mocks.TransferKeeperMock.EXPECT().SendPacketTransfer(
+		setup.Mocks.TransferKeeperMock.EXPECT().SendTransferWithResult(
 			ctx,
 			port,
 			channel,
@@ -238,8 +238,8 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			hostAccAddr,
 			destAddr,
 			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
-		).Return(uint64(0), nil),
+			uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+		).Return(channeltypes.Packet{}, nil),
 	)
 
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)

@@ -39,10 +39,10 @@ var (
 		RevisionHeight: 0,
 	}
 	// Timeout timestamp following IBC defaults
-	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
+	DefaultForwardTransferPacketTimeoutTimestamp = time.Duration(transfertypes.DefaultRelativePacketTimeoutTimestamp) * time.Nanosecond
 
 	// 28 day timeout for refund packets since funds are stuck in router module otherwise.
-	RefundTransferPacketTimeoutTimestamp = uint64((28 * 24 * time.Hour).Nanoseconds())
+	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
 )
 
 // NewKeeper creates a new 29-fee Keeper instance
@@ -69,7 +69,17 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InFlightPacket, srcPacket channeltypes.Packet, srcPacketSender string, parsedReceiver *parser.ParsedReceiver, token sdk.Coin, labels []metrics.Label) error {
+func (k Keeper) ForwardTransferPacket(
+	ctx sdk.Context,
+	inFlightPacket *types.InFlightPacket,
+	srcPacket channeltypes.Packet,
+	srcPacketSender string,
+	parsedReceiver *parser.ParsedReceiver,
+	token sdk.Coin,
+	maxRetries uint8,
+	timeout time.Duration,
+	labels []metrics.Label,
+) error {
 	var err error
 	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
 	packetAmount := token.Amount.Sub(feeAmount)
@@ -87,21 +97,8 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		}
 	}
 
-	var timeoutTimestamp uint64
-
-	if inFlightPacket != nil {
-		timeoutTimestamp = inFlightPacket.Timeout
-	} else {
-		timeout := parsedReceiver.Timeout.Nanoseconds()
-		if timeout <= 0 {
-			timeoutTimestamp = DefaultTransferPacketTimeoutTimestamp
-		} else {
-			timeoutTimestamp = uint64(timeout)
-		}
-	}
-
 	// send tokens to destination
-	sequence, err := k.transferKeeper.SendPacketTransfer(
+	packet, err := k.transferKeeper.SendTransferWithResult(
 		ctx,
 		parsedReceiver.Port,
 		parsedReceiver.Channel,
@@ -109,7 +106,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		parsedReceiver.HostAccAddr,
 		parsedReceiver.Destination,
 		DefaultTransferPacketTimeoutHeight,
-		timeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
+		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
 	)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",
@@ -133,14 +130,13 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 			OriginalSenderAddress: srcPacketSender,
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
-			RetriesRemaining:      int32(parsedReceiver.RetriesRemaining),
-			Timeout:               timeoutTimestamp,
+			RetriesRemaining:      int32(maxRetries),
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
 	}
 
-	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence)
+	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, packet.Sequence)
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(inFlightPacket)
 	store.Set(key, bz)
@@ -161,7 +157,12 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	return nil
 }
 
-func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error {
+func (k Keeper) HandleTimeout(
+	ctx sdk.Context,
+	packet channeltypes.Packet,
+	maxRetries uint8,
+	timeout time.Duration,
+) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 
@@ -201,11 +202,10 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 
 	// send transfer again
 	receiver := &parser.ParsedReceiver{
-		HostAccAddr:      sdk.MustAccAddressFromBech32(data.Sender),
-		Destination:      data.Receiver,
-		Channel:          packet.SourceChannel,
-		Port:             packet.SourcePort,
-		RetriesRemaining: uint8(inFlightPacket.RetriesRemaining),
+		HostAccAddr: sdk.MustAccAddressFromBech32(data.Sender),
+		Destination: data.Receiver,
+		Channel:     packet.SourceChannel,
+		Port:        packet.SourcePort,
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -225,7 +225,7 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 
 	var token = sdk.NewCoin(denom, amount)
 
-	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
+	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, maxRetries, timeout, nil)
 }
 
 func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
@@ -240,7 +240,7 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 	store.Delete(key)
 }
 
-func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet) {
+func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet, timeout time.Duration) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
@@ -286,7 +286,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		return
 	}
 
-	if _, err := k.transferKeeper.SendPacketTransfer(
+	if _, err := k.transferKeeper.SendTransferWithResult(
 		ctx,
 		inFlightPacket.RefundPortId,
 		inFlightPacket.RefundChannelId,
@@ -294,7 +294,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		sdk.MustAccAddressFromBech32(data.Sender),
 		inFlightPacket.OriginalSenderAddress,
 		DefaultTransferPacketTimeoutHeight,
-		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
+		uint64(timeout.Nanoseconds())+uint64(ctx.BlockTime().UnixNano()),
 	); err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for refund",
 			"key", string(key),

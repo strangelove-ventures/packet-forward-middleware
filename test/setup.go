@@ -127,7 +127,8 @@ func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeep
 }
 
 func (i initializer) routerModule(routerKeeper keeper.Keeper, ibcModule porttypes.IBCModule) router.AppModule {
-	routerModule := router.NewAppModule(routerKeeper, ibcModule)
+	routerModule := router.NewAppModule(routerKeeper, ibcModule, 0,
+		keeper.DefaultForwardTransferPacketTimeoutTimestamp, keeper.DefaultRefundTransferPacketTimeoutTimestamp)
 
 	return routerModule
 }

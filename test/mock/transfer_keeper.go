@@ -9,6 +9,7 @@ import (
 
 	types "github.com/cosmos/cosmos-sdk/types"
 	types0 "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
+	types1 "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -35,17 +36,17 @@ func (m *MockTransferKeeper) EXPECT() *MockTransferKeeperMockRecorder {
 	return m.recorder
 }
 
-// SendPacketTransfer mocks base method.
-func (m *MockTransferKeeper) SendPacketTransfer(arg0 types.Context, arg1, arg2 string, arg3 types.Coin, arg4 types.AccAddress, arg5 string, arg6 types0.Height, arg7 uint64) (uint64, error) {
+// SendTransferWithResult mocks base method.
+func (m *MockTransferKeeper) SendTransferWithResult(arg0 types.Context, arg1, arg2 string, arg3 types.Coin, arg4 types.AccAddress, arg5 string, arg6 types0.Height, arg7 uint64) (types1.Packet, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendPacketTransfer", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
-	ret0, _ := ret[0].(uint64)
+	ret := m.ctrl.Call(m, "SendTransferWithResult", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	ret0, _ := ret[0].(types1.Packet)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SendPacketTransfer indicates an expected call of SendPacketTransfer.
-func (mr *MockTransferKeeperMockRecorder) SendPacketTransfer(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
+// SendTransferWithResult indicates an expected call of SendTransferWithResult.
+func (mr *MockTransferKeeperMockRecorder) SendTransferWithResult(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacketTransfer", reflect.TypeOf((*MockTransferKeeper)(nil).SendPacketTransfer), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTransferWithResult", reflect.TypeOf((*MockTransferKeeper)(nil).SendTransferWithResult), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7)
 }
