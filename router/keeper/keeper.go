@@ -131,6 +131,7 @@ func (k Keeper) ForwardTransferPacket(
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RetriesRemaining:      int32(maxRetries),
+			Timeout:               uint64(timeout.Nanoseconds()),
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -160,8 +161,6 @@ func (k Keeper) ForwardTransferPacket(
 func (k Keeper) HandleTimeout(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
-	maxRetries uint8,
-	timeout time.Duration,
 ) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
@@ -225,7 +224,7 @@ func (k Keeper) HandleTimeout(
 
 	var token = sdk.NewCoin(denom, amount)
 
-	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, maxRetries, timeout, nil)
+	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, uint8(inFlightPacket.RetriesRemaining), time.Duration(inFlightPacket.Timeout)*time.Nanosecond, nil)
 }
 
 func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {

@@ -282,7 +282,21 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		}
 		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
-		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, am.retriesOnTimeout, am.forwardTimeout, []metrics.Label{})
+		var timeout time.Duration
+		if parsedReceiver.Timeout.Nanoseconds() > 0 {
+			timeout = parsedReceiver.Timeout
+		} else {
+			timeout = am.forwardTimeout
+		}
+
+		var retries uint8
+		if parsedReceiver.ForwardRetries != nil {
+			retries = *parsedReceiver.ForwardRetries
+		} else {
+			retries = am.retriesOnTimeout
+		}
+
+		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, retries, timeout, []metrics.Label{})
 		if err != nil {
 			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 			ack = channeltypes.NewErrorAcknowledgement(err)
@@ -313,7 +327,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 		return err
 	}
 
-	if err := am.keeper.HandleTimeout(ctx, packet, am.retriesOnTimeout, am.forwardTimeout); err != nil {
+	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
 		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 	}
 
