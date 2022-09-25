@@ -194,6 +194,17 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
 
+func (k Keeper) RemoveTrackedPacket(ctx sdk.Context, packet channeltypes.Packet) {
+	store := ctx.KVStore(k.storeKey)
+	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
+	if !store.Has(key) {
+		// not a forwarded packet, so ignore
+		return
+	}
+
+	store.Delete(key)
+}
+
 func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
@@ -228,6 +239,8 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		DefaultTransferPacketTimeoutHeight,
 		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
+
+	k.RemoveTrackedPacket(ctx, packet)
 
 	return err
 }
