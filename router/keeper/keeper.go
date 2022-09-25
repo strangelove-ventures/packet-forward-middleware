@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/armon/go-metrics"
 	"github.com/tendermint/tendermint/libs/log"
@@ -39,6 +40,9 @@ var (
 	}
 	// Timeout timestamp following IBC defaults
 	DefaultTransferPacketTimeoutTimestamp = transfertypes.DefaultRelativePacketTimeoutTimestamp
+
+	// 28 day timeout for refund packets since funds are stuck in router module otherwise.
+	RefundTransferPacketTimeoutTimestamp = uint64((28 * 24 * time.Hour).Nanoseconds())
 )
 
 // NewKeeper creates a new 29-fee Keeper instance
@@ -80,14 +84,13 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		}
 	}
 
-	k.Logger(ctx).Debug("packetForwardMiddleware calling SendPacketTransfer",
-		"amount", packetCoin.Amount.String(),
-		"denom", packetCoin.Denom,
-		"sender", parsedReceiver.HostAccAddr,
-		"receiver", parsedReceiver.Destination,
-		"port", parsedReceiver.Port,
-		"channel", parsedReceiver.Channel,
-	)
+	var timeoutTimestamp uint64
+	timeout := parsedReceiver.Timeout.Nanoseconds()
+	if timeout <= 0 {
+		timeoutTimestamp = DefaultTransferPacketTimeoutTimestamp
+	} else {
+		timeoutTimestamp = uint64(timeoutTimestamp)
+	}
 
 	// send tokens to destination
 	sequence, err := k.transferKeeper.SendPacketTransfer(
@@ -98,7 +101,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		parsedReceiver.HostAccAddr,
 		parsedReceiver.Destination,
 		DefaultTransferPacketTimeoutHeight,
-		DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
+		timeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",
@@ -110,20 +113,8 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 			"port", parsedReceiver.Port,
 			"channel", parsedReceiver.Channel,
 		)
-
-		// TODO refund to src chain
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
-
-	k.Logger(ctx).Debug("packetForwardMiddleware post SendPacketTransfer",
-		"sequence", sequence,
-		"amount", packetCoin.Amount.String(),
-		"denom", packetCoin.Denom,
-		"sender", parsedReceiver.HostAccAddr,
-		"receiver", parsedReceiver.Destination,
-		"port", parsedReceiver.Port,
-		"channel", parsedReceiver.Channel,
-	)
 
 	// Store the following information in keeper:
 	// key - information about forwarded packet: src_channel (parsedReceiver.Channel), src_port (parsedReceiver.Port), sequence
@@ -200,15 +191,6 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 
 	var token = sdk.NewCoin(data.Denom, amount)
 
-	k.Logger(ctx).Debug("packetForwardMiddleware HandleTimeout calling SendPacketTransfer",
-		"amount", data.Amount,
-		"denom", data.Denom,
-		"sender", data.Sender,
-		"receiver", data.Receiver,
-		"port", packet.SourcePort,
-		"channel", packet.SourceChannel,
-	)
-
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
 
@@ -236,15 +218,6 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 
 	var token = sdk.NewCoin(data.Denom, amount)
 
-	k.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket",
-		"amount", token.Amount.String(),
-		"denom", token.Denom,
-		"sender", relayer,
-		"receiver", inFlightPacket.OriginalSenderAddress,
-		"port", inFlightPacket.RefundPortId,
-		"channel", inFlightPacket.RefundChannelId,
-	)
-
 	_, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
 		inFlightPacket.RefundPortId,
@@ -253,7 +226,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		relayer,
 		inFlightPacket.OriginalSenderAddress,
 		DefaultTransferPacketTimeoutHeight,
-		DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
+		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
 
 	return err

@@ -17,6 +17,36 @@ func TestParseReceiverDataTransfer(t *testing.T) {
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
+	require.Equal(t, pt.MaxRetries, uint8(0))
+	require.Equal(t, pt.Timeout.Nanoseconds(), int64(0))
+}
+
+func TestParseReceiverWithRetries(t *testing.T) {
+	data := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:4"
+	pt, err := parser.ParseReceiverData(data)
+
+	require.NoError(t, err)
+	require.True(t, pt.ShouldForward)
+	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	require.Equal(t, pt.Port, "transfer")
+	require.Equal(t, pt.Channel, "channel-0")
+	require.Equal(t, pt.MaxRetries, uint8(4))
+	require.Equal(t, pt.Timeout.Nanoseconds(), int64(0))
+}
+
+func TestParseReceiverWithRetriesAndTimeout(t *testing.T) {
+	data := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:4:10s"
+	pt, err := parser.ParseReceiverData(data)
+
+	require.NoError(t, err)
+	require.True(t, pt.ShouldForward)
+	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	require.Equal(t, pt.Port, "transfer")
+	require.Equal(t, pt.Channel, "channel-0")
+	require.Equal(t, pt.MaxRetries, uint8(4))
+	require.Equal(t, pt.Timeout.Seconds(), float64(10))
 }
 
 func TestParseReceiverDataNoTransfer(t *testing.T) {
@@ -62,6 +92,11 @@ func TestParseReceiverDataErrors(t *testing.T) {
 			"invalid max retries",
 			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:abc",
 			"unparsable retries",
+		},
+		{
+			"invalid timeout timestamp",
+			"cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer\\channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k:4:abc",
+			"unparsable timeout",
 		},
 	}
 
