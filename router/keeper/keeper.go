@@ -292,7 +292,9 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		return fmt.Errorf("error parsing amount from string for refund: %s", data.Amount)
 	}
 
-	var token = sdk.NewCoin(data.Denom, amount)
+	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
+
+	var token = sdk.NewCoin(denom, amount)
 
 	_, err := k.transferKeeper.SendPacketTransfer(
 		ctx,

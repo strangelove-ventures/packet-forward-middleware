@@ -291,9 +291,11 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
+	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
+		return err
+	}
 	if err := am.keeper.HandleTimeout(ctx, packet, relayer); err != nil {
 		_ = am.keeper.RefundForwardedPacket(ctx, packet, relayer)
 	}
-
-	return am.app.OnTimeoutPacket(ctx, packet, relayer)
+	return nil
 }
