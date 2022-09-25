@@ -102,6 +102,16 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
 
+	k.Logger(ctx).Debug("packetForwardMiddleware post SendPacketTransfer",
+		"sequence", sequence,
+		"amount", packetCoin.Amount.String(),
+		"denom", packetCoin.Denom,
+		"sender", parsedReceiver.HostAccAddr,
+		"receiver", parsedReceiver.Destination,
+		"port", parsedReceiver.Port,
+		"channel", parsedReceiver.Channel,
+	)
+
 	// Store the following information in keeper:
 	// key - information about forwarded packet: src_channel (parsedReceiver.Channel), src_port (parsedReceiver.Port), sequence
 	// value - information about original packet for refunding if necessary: retries, srcPacketSender, srcPacket.DestinationChannel, srcPacket.DestinationPort
