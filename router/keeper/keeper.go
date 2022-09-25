@@ -80,6 +80,9 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	if feeAmount.IsPositive() {
 		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
 		if err != nil {
+			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
+				"error", err,
+			)
 			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
@@ -132,9 +135,18 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 		inFlightPacket.Retries++
 	}
 
+	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence)
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(inFlightPacket)
-	store.Set(types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence), bz)
+	store.Set(key, bz)
+
+	k.Logger(ctx).Debug("packetForwardMiddleware Saved forwarded packet info",
+		"key", string(key),
+		"original-sender-address", srcPacketSender,
+		"refund-channel-id", srcPacket.DestinationChannel,
+		"refund-port-id", srcPacket.DestinationPort,
+		"max-retries", parsedReceiver.MaxRetries,
+	)
 
 	defer func() {
 		telemetry.SetGaugeWithLabels(
@@ -155,6 +167,11 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
+
+	k.Logger(ctx).Debug("packetForwardMiddleware observed timeout",
+		"key", string(key),
+	)
+
 	if !store.Has(key) {
 		// not a forwarded packet, so ignore
 		return nil
@@ -165,6 +182,13 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 
 	if inFlightPacket.Retries >= inFlightPacket.MaxRetries {
+		k.Logger(ctx).Error("packetForwardMiddleware reached max retries for packet",
+			"key", string(key),
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+			"max-retries", inFlightPacket.MaxRetries,
+		)
 		return fmt.Errorf("giving up on packet on channel (%s) port (%s) after max retries: (%d)",
 			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.MaxRetries)
 	}
@@ -172,6 +196,14 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 	// Parse packet data
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+		k.Logger(ctx).Error("packetForwardMiddleware error unmarshalling packet data",
+			"key", string(key),
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+			"max-retries", inFlightPacket.MaxRetries,
+			"error", err,
+		)
 		return fmt.Errorf("error unmarshalling packet data: %w", err)
 	}
 
@@ -186,6 +218,14 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
+		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for router retry",
+			"key", string(key),
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+			"max-retries", inFlightPacket.MaxRetries,
+			"amount", data.Amount,
+		)
 		return fmt.Errorf("error parsing amount from string for router retry: %s", data.Amount)
 	}
 
@@ -209,6 +249,12 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
+		k.Logger(ctx).Error("packetForwardMiddleware no store key exists for that packet",
+			"key", string(key),
+			"sequence", packet.Sequence,
+			"channel-id", packet.SourceChannel,
+			"port-id", packet.SourcePort,
+		)
 		return fmt.Errorf("called RefundForwardedPacket but no store key exists for that packet: %s", string(key))
 	}
 
@@ -219,12 +265,31 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 	// Parse packet data
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+		k.Logger(ctx).Error("packetForwardMiddleware error unmarshalling packet data for refund",
+			"key", string(key),
+			"sequence", packet.Sequence,
+			"channel-id", packet.SourceChannel,
+			"port-id", packet.SourcePort,
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+		)
 		return fmt.Errorf("error unmarshalling packet data: %w", err)
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
-		return fmt.Errorf("error parsing amount from string for router retry: %s", data.Amount)
+		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund",
+			"key", string(key),
+			"sequence", packet.Sequence,
+			"channel-id", packet.SourceChannel,
+			"port-id", packet.SourcePort,
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+			"amount", data.Amount,
+		)
+		return fmt.Errorf("error parsing amount from string for refund: %s", data.Amount)
 	}
 
 	var token = sdk.NewCoin(data.Denom, amount)
@@ -239,6 +304,19 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		DefaultTransferPacketTimeoutHeight,
 		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
 	)
+
+	if err != nil {
+		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for refund",
+			"key", string(key),
+			"sequence", packet.Sequence,
+			"channel-id", packet.SourceChannel,
+			"port-id", packet.SourcePort,
+			"original-sender-address", inFlightPacket.OriginalSenderAddress,
+			"refund-channel-id", inFlightPacket.RefundChannelId,
+			"refund-port-id", inFlightPacket.RefundPortId,
+			"amount", data.Amount,
+		)
+	}
 
 	k.RemoveTrackedPacket(ctx, packet)
 

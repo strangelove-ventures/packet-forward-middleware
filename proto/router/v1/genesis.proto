@@ -8,11 +8,7 @@ import "gogoproto/gogo.proto";
 
 // GenesisState defines the router genesis state
 message GenesisState { 
-  Params params = 1 [ (gogoproto.nullable) = false ]; 
-  map<string, InFlightPacket> in_flight_packets = 2 [
-    (gogoproto.moretags) = "yaml:\"in_flight_packets\"",
-    (gogoproto.nullable) = false
-  ];
+  Params params = 1 [ (gogoproto.nullable) = false ];
 }
 
 // Params defines the set of IBC router parameters.
