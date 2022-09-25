@@ -164,7 +164,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	return nil
 }
 
-func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
+func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 
@@ -209,7 +209,7 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet, relay
 
 	// send transfer again
 	receiver := &parser.ParsedReceiver{
-		HostAccAddr: sdk.AccAddress(data.Sender),
+		HostAccAddr: sdk.MustAccAddressFromBech32(data.Sender),
 		Destination: data.Receiver,
 		Channel:     packet.SourceChannel,
 		Port:        packet.SourcePort,
@@ -245,7 +245,7 @@ func (k Keeper) RemoveTrackedPacket(ctx sdk.Context, packet channeltypes.Packet)
 	store.Delete(key)
 }
 
-func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
+func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
@@ -301,7 +301,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		inFlightPacket.RefundPortId,
 		inFlightPacket.RefundChannelId,
 		token,
-		relayer,
+		sdk.MustAccAddressFromBech32(data.Sender),
 		inFlightPacket.OriginalSenderAddress,
 		DefaultTransferPacketTimeoutHeight,
 		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),

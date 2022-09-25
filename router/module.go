@@ -294,8 +294,8 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
 		return err
 	}
-	if err := am.keeper.HandleTimeout(ctx, packet, relayer); err != nil {
-		_ = am.keeper.RefundForwardedPacket(ctx, packet, relayer)
+	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
+		_ = am.keeper.RefundForwardedPacket(ctx, packet)
 	}
 	return nil
 }
