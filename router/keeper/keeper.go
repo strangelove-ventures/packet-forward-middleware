@@ -229,7 +229,9 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 		return fmt.Errorf("error parsing amount from string for router retry: %s", data.Amount)
 	}
 
-	var token = sdk.NewCoin(data.Denom, amount)
+	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
+
+	var token = sdk.NewCoin(denom, amount)
 
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
