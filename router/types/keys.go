@@ -4,7 +4,7 @@ import fmt "fmt"
 
 const (
 	// ModuleName defines the 29-fee name
-	ModuleName = "packet-forward-middleware"
+	ModuleName = "packetforwardmiddleware"
 
 	// StoreKey is the store key string for IBC transfer
 	StoreKey = ModuleName
