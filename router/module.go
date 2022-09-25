@@ -270,6 +270,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, []metrics.Label{})
 		if err != nil {
+			_ = am.keeper.RefundForwardedPacket(ctx, packet)
 			ack = channeltypes.NewErrorAcknowledgement(err)
 		}
 	}
