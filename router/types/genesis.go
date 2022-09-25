@@ -1,16 +1,18 @@
 package types
 
 // NewGenesisState creates a 29-fee GenesisState instance.
-func NewGenesisState(params Params) *GenesisState {
+func NewGenesisState(params Params, inFlightPackets map[string]InFlightPacket) *GenesisState {
 	return &GenesisState{
-		Params: params,
+		Params:          params,
+		InFlightPackets: inFlightPackets,
 	}
 }
 
 // DefaultGenesisState returns a GenesisState with "transfer" as the default PortID.
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params: DefaultParams(),
+		Params:          DefaultParams(),
+		InFlightPackets: make(map[string]InFlightPacket),
 	}
 }
 

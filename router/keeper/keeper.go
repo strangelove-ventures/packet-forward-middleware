@@ -88,11 +88,16 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	}
 
 	var timeoutTimestamp uint64
-	timeout := parsedReceiver.Timeout.Nanoseconds()
-	if timeout <= 0 {
-		timeoutTimestamp = DefaultTransferPacketTimeoutTimestamp
+
+	if inFlightPacket != nil {
+		timeoutTimestamp = inFlightPacket.Timeout
 	} else {
-		timeoutTimestamp = uint64(timeoutTimestamp)
+		timeout := parsedReceiver.Timeout.Nanoseconds()
+		if timeout <= 0 {
+			timeoutTimestamp = DefaultTransferPacketTimeoutTimestamp
+		} else {
+			timeoutTimestamp = uint64(timeout)
+		}
 	}
 
 	// send tokens to destination
@@ -130,6 +135,7 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 			RefundPortId:          srcPacket.DestinationPort,
 			Retries:               0,
 			MaxRetries:            int32(parsedReceiver.MaxRetries),
+			Timeout:               timeoutTimestamp,
 		}
 	} else {
 		inFlightPacket.Retries++
@@ -139,14 +145,6 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(inFlightPacket)
 	store.Set(key, bz)
-
-	k.Logger(ctx).Debug("packetForwardMiddleware Saved forwarded packet info",
-		"key", string(key),
-		"original-sender-address", srcPacketSender,
-		"refund-channel-id", srcPacket.DestinationChannel,
-		"refund-port-id", srcPacket.DestinationPort,
-		"max-retries", parsedReceiver.MaxRetries,
-	)
 
 	defer func() {
 		telemetry.SetGaugeWithLabels(
@@ -167,10 +165,6 @@ func (k Keeper) ForwardTransferPacket(ctx sdk.Context, inFlightPacket *types.InF
 func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
-
-	k.Logger(ctx).Debug("packetForwardMiddleware observed timeout",
-		"key", string(key),
-	)
 
 	if !store.Has(key) {
 		// not a forwarded packet, so ignore
