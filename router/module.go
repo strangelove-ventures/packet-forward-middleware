@@ -270,7 +270,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, []metrics.Label{})
 		if err != nil {
-			_ = am.keeper.RefundForwardedPacket(ctx, packet)
+			am.keeper.RefundForwardedPacket(ctx, packet)
 			ack = channeltypes.NewErrorAcknowledgement(err)
 		}
 	}
@@ -279,9 +279,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 // OnAcknowledgementPacket implements the IBCModule interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
-	am.keeper.RemoveTrackedPacket(ctx, packet)
+	if err := am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer); err != nil {
+		am.keeper.RefundForwardedPacket(ctx, packet)
+		return err
+	}
 
-	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
+	return nil
 }
 
 // OnTimeoutPacket implements the IBCModule interface
@@ -289,8 +292,10 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
 		return err
 	}
+
 	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
-		_ = am.keeper.RefundForwardedPacket(ctx, packet)
+		am.keeper.RefundForwardedPacket(ctx, packet)
 	}
+
 	return nil
 }

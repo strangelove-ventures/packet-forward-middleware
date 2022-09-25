@@ -167,7 +167,7 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 
 	if !store.Has(key) {
-		// not a forwarded packet, so ignore
+		// not a forwarded packet, ignore.
 		return nil
 	}
 
@@ -230,31 +230,19 @@ func (k Keeper) HandleTimeout(ctx sdk.Context, packet channeltypes.Packet) error
 	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, nil)
 }
 
-func (k Keeper) RemoveTrackedPacket(ctx sdk.Context, packet channeltypes.Packet) {
+func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
-		// not a forwarded packet, so ignore
+		// not a forwarded packet, ignore.
 		return
 	}
 
-	store.Delete(key)
-}
-
-func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packet) error {
-	store := ctx.KVStore(k.storeKey)
-	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
-	if !store.Has(key) {
-		k.Logger(ctx).Error("packetForwardMiddleware no store key exists for that packet",
-			"key", string(key),
-			"sequence", packet.Sequence,
-			"channel-id", packet.SourceChannel,
-			"port-id", packet.SourcePort,
-		)
-		return fmt.Errorf("called RefundForwardedPacket but no store key exists for that packet: %s", string(key))
-	}
-
 	bz := store.Get(key)
+
+	// done with packet key now, delete.
+	store.Delete(key)
+
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 
@@ -270,7 +258,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
 		)
-		return fmt.Errorf("error unmarshalling packet data: %w", err)
+		return
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -285,25 +273,19 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 			"refund-port-id", inFlightPacket.RefundPortId,
 			"amount", data.Amount,
 		)
-		return fmt.Errorf("error parsing amount from string for refund: %s", data.Amount)
+		return
 	}
 
-	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
-
-	var token = sdk.NewCoin(denom, amount)
-
-	_, err := k.transferKeeper.SendPacketTransfer(
+	if _, err := k.transferKeeper.SendPacketTransfer(
 		ctx,
 		inFlightPacket.RefundPortId,
 		inFlightPacket.RefundChannelId,
-		token,
+		sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
 		sdk.MustAccAddressFromBech32(data.Sender),
 		inFlightPacket.OriginalSenderAddress,
 		DefaultTransferPacketTimeoutHeight,
 		RefundTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
-	)
-
-	if err != nil {
+	); err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for refund",
 			"key", string(key),
 			"sequence", packet.Sequence,
@@ -316,8 +298,4 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 			"error", err,
 		)
 	}
-
-	k.RemoveTrackedPacket(ctx, packet)
-
-	return err
 }
