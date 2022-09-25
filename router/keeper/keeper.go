@@ -317,6 +317,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
 			"amount", data.Amount,
+			"error", err,
 		)
 	}
 
