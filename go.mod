@@ -112,3 +112,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/cosmos/ibc-go/v5 => github.com/strangelove-ventures/ibc-go/v5 v5.0.0-20220926035348-b357d3f4092a

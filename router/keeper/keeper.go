@@ -88,7 +88,11 @@ func (k Keeper) ForwardTransferPacket(
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, parsedReceiver.HostAccAddr)
+		hostAccAddr, err := sdk.AccAddressFromBech32(parsedReceiver.HostAccAddr)
+		if err != nil {
+			return err
+		}
+		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, hostAccAddr)
 		if err != nil {
 			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
 				"error", err,
@@ -98,15 +102,17 @@ func (k Keeper) ForwardTransferPacket(
 	}
 
 	// send tokens to destination
-	packet, err := k.transferKeeper.SendTransferWithResult(
-		ctx,
-		parsedReceiver.Port,
-		parsedReceiver.Channel,
-		packetCoin,
-		parsedReceiver.HostAccAddr,
-		parsedReceiver.Destination,
-		DefaultTransferPacketTimeoutHeight,
-		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
+	packet, err := k.transferKeeper.Transfer(
+		ctx.Context(),
+		transfertypes.NewMsgTransfer(
+			parsedReceiver.Port,
+			parsedReceiver.Channel,
+			packetCoin,
+			parsedReceiver.HostAccAddr,
+			parsedReceiver.Destination,
+			DefaultTransferPacketTimeoutHeight,
+			uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
+		),
 	)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",
@@ -201,7 +207,7 @@ func (k Keeper) HandleTimeout(
 
 	// send transfer again
 	receiver := &parser.ParsedReceiver{
-		HostAccAddr: sdk.MustAccAddressFromBech32(data.Sender),
+		HostAccAddr: data.Sender,
 		Destination: data.Receiver,
 		Channel:     packet.SourceChannel,
 		Port:        packet.SourcePort,
@@ -285,15 +291,17 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 		return
 	}
 
-	if _, err := k.transferKeeper.SendTransferWithResult(
+	if _, err := k.transferKeeper.Transfer(
 		ctx,
-		inFlightPacket.RefundPortId,
-		inFlightPacket.RefundChannelId,
-		sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
-		sdk.MustAccAddressFromBech32(data.Sender),
-		inFlightPacket.OriginalSenderAddress,
-		DefaultTransferPacketTimeoutHeight,
-		uint64(timeout.Nanoseconds())+uint64(ctx.BlockTime().UnixNano()),
+		transfertypes.NewMsgTransfer(
+			inFlightPacket.RefundPortId,
+			inFlightPacket.RefundChannelId,
+			sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
+			data.Sender,
+			inFlightPacket.OriginalSenderAddress,
+			DefaultTransferPacketTimeoutHeight,
+			uint64(timeout.Nanoseconds())+uint64(ctx.BlockTime().UnixNano()),
+		),
 	); err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for refund",
 			"key", string(key),

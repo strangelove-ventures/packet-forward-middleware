@@ -14,7 +14,7 @@ func TestParseReceiverDataTransfer(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pt.ShouldForward)
-	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.HostAccAddr, "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
@@ -28,7 +28,7 @@ func TestParseReceiverWithTimeout(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pt.ShouldForward)
-	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.HostAccAddr, "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
@@ -43,7 +43,7 @@ func TestParseReceiverWithRetriesAndTimeout(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pt.ShouldForward)
-	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.HostAccAddr, "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
 	require.Equal(t, pt.Destination, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
@@ -57,7 +57,7 @@ func TestParseReceiverWithAnotherMultihop(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, pt.ShouldForward)
-	require.Equal(t, pt.HostAccAddr.String(), "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
+	require.Equal(t, pt.HostAccAddr, "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs")
 	require.Equal(t, pt.Destination, "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs|transfer/channel-0|10m|5:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
 	require.Equal(t, pt.Port, "transfer")
 	require.Equal(t, pt.Channel, "channel-0")
@@ -93,11 +93,6 @@ func TestParseReceiverDataErrors(t *testing.T) {
 			"missing pipe",
 			"transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
 			"formatting incorrect",
-		},
-		{
-			"invalid this chain address",
-			"somm16plylpsgxechajltx9yeseqexzdzut9g8vla4k|transfer/channel-0:cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k",
-			"decoding bech32 failed",
 		},
 		{
 			"missing slash",

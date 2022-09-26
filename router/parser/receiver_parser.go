@@ -5,14 +5,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 type ParsedReceiver struct {
 	ShouldForward bool
 
-	HostAccAddr    sdk.AccAddress
+	HostAccAddr    string
 	Destination    string
 	Port           string
 	Channel        string
@@ -65,11 +63,7 @@ func ParseReceiverData(receiverData string) (*ParsedReceiver, error) {
 		}
 	}
 
-	hostAccAddr, err := sdk.AccAddressFromBech32(sep2[0])
-	if err != nil {
-		return nil, err
-	}
-	receiver.HostAccAddr = hostAccAddr
+	receiver.HostAccAddr = sep2[0]
 
 	sep3 := strings.Split(sep2[1], "/")
 	if len(sep3) != 2 {
