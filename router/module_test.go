@@ -174,7 +174,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
-			ctx.Context(),
+			sdk.WrapSDKContext(ctx),
 			transfertypes.NewMsgTransfer(
 				port,
 				channel,
@@ -233,7 +233,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 		).Return(nil),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
-			ctx.Context(),
+			sdk.WrapSDKContext(ctx),
 			transfertypes.NewMsgTransfer(
 				port,
 				channel,

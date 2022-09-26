@@ -103,7 +103,7 @@ func (k Keeper) ForwardTransferPacket(
 
 	// send tokens to destination
 	packet, err := k.transferKeeper.Transfer(
-		ctx.Context(),
+		sdk.WrapSDKContext(ctx),
 		transfertypes.NewMsgTransfer(
 			parsedReceiver.Port,
 			parsedReceiver.Channel,
@@ -292,7 +292,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, packet channeltypes.Packe
 	}
 
 	if _, err := k.transferKeeper.Transfer(
-		ctx,
+		sdk.WrapSDKContext(ctx),
 		transfertypes.NewMsgTransfer(
 			inFlightPacket.RefundPortId,
 			inFlightPacket.RefundChannelId,
