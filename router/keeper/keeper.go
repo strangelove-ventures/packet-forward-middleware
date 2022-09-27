@@ -13,11 +13,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v5/modules/core/24-host"
-	coretypes "github.com/cosmos/ibc-go/v5/modules/core/types"
+	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
+	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
 )
@@ -29,6 +29,7 @@ type Keeper struct {
 	paramSpace paramtypes.Subspace
 
 	transferKeeper types.TransferKeeper
+	channelKeeper  types.ChannelKeeper
 	distrKeeper    types.DistributionKeeper
 }
 
@@ -48,7 +49,7 @@ var (
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec, key storetypes.StoreKey, paramSpace paramtypes.Subspace,
-	transferKeeper types.TransferKeeper, distrKeeper types.DistributionKeeper,
+	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper, distrKeeper types.DistributionKeeper,
 ) Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
@@ -56,10 +57,12 @@ func NewKeeper(
 	}
 
 	return Keeper{
-		cdc:            cdc,
-		storeKey:       key,
+		cdc:        cdc,
+		storeKey:   key,
+		paramSpace: paramSpace,
+
 		transferKeeper: transferKeeper,
-		paramSpace:     paramSpace,
+		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
 	}
 }
@@ -102,7 +105,7 @@ func (k Keeper) ForwardTransferPacket(
 	}
 
 	// send tokens to destination
-	packet, err := k.transferKeeper.Transfer(
+	_, err = k.transferKeeper.Transfer(
 		sdk.WrapSDKContext(ctx),
 		transfertypes.NewMsgTransfer(
 			parsedReceiver.Port,
@@ -143,7 +146,29 @@ func (k Keeper) ForwardTransferPacket(
 		inFlightPacket.RetriesRemaining--
 	}
 
-	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, packet.Sequence)
+	// [Begin] this is a workaround to get the sequence of the packet transfer above in ibc-go v3 through v5
+	// since the sequence number is not returned by the `Transfer` or `SendTransfer` methods.
+	nextSequence, ok := k.channelKeeper.GetNextSequenceSend(ctx, parsedReceiver.Port, parsedReceiver.Channel)
+	if !ok {
+		return sdkerrors.Wrapf(
+			sdkerrors.ErrKeyNotFound,
+			fmt.Sprintf("unable to retrieve next send sequence on port: %s, channel: %s",
+				parsedReceiver.Port, parsedReceiver.Channel,
+			),
+		)
+	}
+	sequence := nextSequence - 1
+	if sequence <= 0 {
+		return sdkerrors.Wrapf(
+			sdkerrors.ErrKeyNotFound,
+			fmt.Sprintf("unexpected sequence: %d, should be greater than 0. port: %s, channel: %s",
+				sequence, parsedReceiver.Port, parsedReceiver.Channel,
+			),
+		)
+	}
+	// [End] sequence workaround
+
+	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence)
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(inFlightPacket)
 	store.Set(key, bz)
