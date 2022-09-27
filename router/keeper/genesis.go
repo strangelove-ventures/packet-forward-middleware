@@ -2,7 +2,7 @@ package keeper
 
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
 )
 
 // InitGenesis
