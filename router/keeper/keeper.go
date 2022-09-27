@@ -13,13 +13,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
-	host "github.com/cosmos/ibc-go/v5/modules/core/24-host"
-	coretypes "github.com/cosmos/ibc-go/v5/modules/core/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
+	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	coretypes "github.com/cosmos/ibc-go/v6/modules/core/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/parser"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
 )
 
 // Keeper defines the IBC fungible transfer keeper

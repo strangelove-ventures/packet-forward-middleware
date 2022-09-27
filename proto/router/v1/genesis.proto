@@ -2,13 +2,13 @@ syntax = "proto3";
 
 package router.v1;
 
-option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v2/router/types";
+option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v6/router/types";
 
 import "gogoproto/gogo.proto";
 
 // GenesisState defines the router genesis state
-message GenesisState { 
-  Params params = 1 [ (gogoproto.nullable) = false ]; 
+message GenesisState {
+  Params params = 1 [ (gogoproto.nullable) = false ];
   map<string, InFlightPacket> in_flight_packets = 2 [
     (gogoproto.moretags) = "yaml:\"in_flight_packets\"",
     (gogoproto.nullable) = false
@@ -28,6 +28,6 @@ message InFlightPacket {
   string original_sender_address = 1;
   string refund_channel_id = 2;
   string refund_port_id = 3;
-  int32 retries_remaining = 4; 
+  int32 retries_remaining = 4;
   uint64 timeout = 5;
 }
