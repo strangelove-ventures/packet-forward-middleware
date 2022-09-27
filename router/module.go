@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"time"
 
-	"cosmossdk.io/math"
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -276,7 +275,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
 			denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 		}
-		unit, err := math.ParseUint(newData.Amount)
+		unit, err := sdk.ParseUint(newData.Amount)
 		if err != nil {
 			channeltypes.NewErrorAcknowledgement(err.Error())
 		}
