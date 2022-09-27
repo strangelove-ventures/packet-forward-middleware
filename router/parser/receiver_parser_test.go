@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/parser"
 	"github.com/stretchr/testify/require"
 )
 

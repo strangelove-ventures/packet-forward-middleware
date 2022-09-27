@@ -1,6 +1,6 @@
 go 1.18
 
-module github.com/strangelove-ventures/packet-forward-middleware/v2
+module github.com/strangelove-ventures/packet-forward-middleware/v5
 
 require (
 	cosmossdk.io/math v1.0.0-beta.3

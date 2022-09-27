@@ -18,8 +18,8 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	host "github.com/cosmos/ibc-go/v5/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v5/modules/core/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/parser"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/types"
 )
 
 // Keeper defines the IBC fungible transfer keeper

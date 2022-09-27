@@ -9,9 +9,9 @@ import (
 	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
 	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/test"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/test"
 	"github.com/stretchr/testify/require"
 )
 
