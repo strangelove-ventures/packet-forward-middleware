@@ -1,8 +1,6 @@
 go 1.18
 
-module github.com/strangelove-ventures/packet-forward-middleware/v2
-
-replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+module github.com/strangelove-ventures/packet-forward-middleware/v5
 
 require (
 	cosmossdk.io/math v1.0.0-beta.3
@@ -112,3 +110,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1

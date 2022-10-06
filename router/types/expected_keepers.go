@@ -1,13 +1,20 @@
 package types
 
 import (
+	context "context"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
+	"github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
 )
 
 // TransferKeeper defines the expected transfer keeper
 type TransferKeeper interface {
-	SendTransfer(ctx sdk.Context, sourcePort, sourceChannel string, token sdk.Coin, sender sdk.AccAddress, receiver string, timeoutHeight clienttypes.Height, timeoutTimestamp uint64) error
+	Transfer(ctx context.Context, msg *types.MsgTransfer) (*types.MsgTransferResponse, error)
+}
+
+// ChannelKeeper defines the expected IBC channel keeper
+type ChannelKeeper interface {
+	GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool)
 }
 
 // DistributionKeeper defines the expected distribution keeper

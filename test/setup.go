@@ -12,10 +12,10 @@ import (
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	porttypes "github.com/cosmos/ibc-go/v5/modules/core/05-port/types"
 	"github.com/golang/mock/gomock"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/test/mock"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v5/test/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/tendermint/tendermint/libs/log"
 	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
@@ -26,11 +26,12 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	initializer := newInitializer()
 
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
+	channelKeeperMock := mock.NewMockChannelKeeper(ctl)
 	distributionKeeperMock := mock.NewMockDistributionKeeper(ctl)
 	ibcModuleMock := mock.NewMockIBCModule(ctl)
 
 	paramsKeeper := initializer.paramsKeeper()
-	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, distributionKeeperMock)
+	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock)
 	routerModule := initializer.routerModule(routerKeeper, ibcModuleMock)
 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
@@ -47,6 +48,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 
 		Mocks: &testMocks{
 			TransferKeeperMock:     transferKeeperMock,
+			ChannelKeeperMock:      channelKeeperMock,
 			DistributionKeeperMock: distributionKeeperMock,
 			IBCModuleMock:          ibcModuleMock,
 		},
@@ -71,6 +73,7 @@ type testKeepers struct {
 
 type testMocks struct {
 	TransferKeeperMock     *mock.MockTransferKeeper
+	ChannelKeeperMock      *mock.MockChannelKeeper
 	DistributionKeeperMock *mock.MockDistributionKeeper
 	IBCModuleMock          *mock.MockIBCModule
 }
@@ -116,18 +119,24 @@ func (i initializer) paramsKeeper() paramskeeper.Keeper {
 	return paramsKeeper
 }
 
-func (i initializer) routerKeeper(paramsKeeper paramskeeper.Keeper, transferKeeper types.TransferKeeper, distributionKeeper types.DistributionKeeper) keeper.Keeper {
+func (i initializer) routerKeeper(
+	paramsKeeper paramskeeper.Keeper,
+	transferKeeper types.TransferKeeper,
+	channelKeeper types.ChannelKeeper,
+	distributionKeeper types.DistributionKeeper,
+) keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
 	i.StateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, i.DB)
 
 	subspace := paramsKeeper.Subspace(types.ModuleName)
-	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, distributionKeeper)
+	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, channelKeeper, distributionKeeper)
 
 	return routerKeeper
 }
 
 func (i initializer) routerModule(routerKeeper keeper.Keeper, ibcModule porttypes.IBCModule) router.AppModule {
-	routerModule := router.NewAppModule(routerKeeper, ibcModule)
+	routerModule := router.NewAppModule(routerKeeper, ibcModule, 0,
+		keeper.DefaultForwardTransferPacketTimeoutTimestamp, keeper.DefaultRefundTransferPacketTimeoutTimestamp)
 
 	return routerModule
 }
