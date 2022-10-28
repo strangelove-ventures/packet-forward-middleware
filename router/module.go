@@ -25,7 +25,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
@@ -232,19 +231,15 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	// parse out any forwarding info
-	parsedReceiver, err := parser.ParseReceiverData(data.Receiver)
+	var metadata *keeper.ForwardMetadata
+	err := json.Unmarshal([]byte(data.Memo), metadata)
 	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(err.Error())
-	}
-
-	if !parsedReceiver.ShouldForward {
+		// not a packet that should be forwarded
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
 	// Modify packet data to process packet transfer for this chain, omitting forwarding info
 	newData := data
-	newData.Receiver = parsedReceiver.HostAccAddr
 	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())
@@ -283,20 +278,20 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
 		var timeout time.Duration
-		if parsedReceiver.Timeout.Nanoseconds() > 0 {
-			timeout = parsedReceiver.Timeout
+		if metadata.Timeout.Nanoseconds() > 0 {
+			timeout = metadata.Timeout
 		} else {
 			timeout = am.forwardTimeout
 		}
 
 		var retries uint8
-		if parsedReceiver.ForwardRetries != nil {
-			retries = *parsedReceiver.ForwardRetries
+		if metadata.Retries != nil {
+			retries = *metadata.Retries
 		} else {
 			retries = am.retriesOnTimeout
 		}
 
-		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, retries, timeout, []metrics.Label{})
+		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 		if err != nil {
 			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 			ack = channeltypes.NewErrorAcknowledgement(err.Error())
