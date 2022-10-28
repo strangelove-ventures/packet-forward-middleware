@@ -18,7 +18,6 @@ import (
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
 )
 
@@ -31,6 +30,14 @@ type Keeper struct {
 	transferKeeper types.TransferKeeper
 	channelKeeper  types.ChannelKeeper
 	distrKeeper    types.DistributionKeeper
+}
+
+type ForwardMetadata struct {
+	Receiver string        `json:"receiver"`
+	Port     string        `json:"port"`
+	Channel  string        `json:"channel"`
+	Timeout  time.Duration `json:"timeout"`
+	Retries  *uint8        `json:"retries"`
 }
 
 var (
@@ -77,7 +84,8 @@ func (k Keeper) ForwardTransferPacket(
 	inFlightPacket *types.InFlightPacket,
 	srcPacket channeltypes.Packet,
 	srcPacketSender string,
-	parsedReceiver *parser.ParsedReceiver,
+	receiver string,
+	metadata *ForwardMetadata,
 	token sdk.Coin,
 	maxRetries uint8,
 	timeout time.Duration,
@@ -91,7 +99,7 @@ func (k Keeper) ForwardTransferPacket(
 
 	// pay fees
 	if feeAmount.IsPositive() {
-		hostAccAddr, err := sdk.AccAddressFromBech32(parsedReceiver.HostAccAddr)
+		hostAccAddr, err := sdk.AccAddressFromBech32(receiver)
 		if err != nil {
 			return err
 		}
@@ -105,14 +113,14 @@ func (k Keeper) ForwardTransferPacket(
 	}
 
 	// send tokens to destination
-	_, err = k.transferKeeper.Transfer(
+	res, err := k.transferKeeper.Transfer(
 		sdk.WrapSDKContext(ctx),
 		transfertypes.NewMsgTransfer(
-			parsedReceiver.Port,
-			parsedReceiver.Channel,
+			metadata.Port,
+			metadata.Channel,
 			packetCoin,
-			parsedReceiver.HostAccAddr,
-			parsedReceiver.Destination,
+			receiver,
+			metadata.Receiver,
 			DefaultTransferPacketTimeoutHeight,
 			uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
 		),
@@ -122,10 +130,10 @@ func (k Keeper) ForwardTransferPacket(
 			"error", err,
 			"amount", packetCoin.Amount.String(),
 			"denom", packetCoin.Denom,
-			"sender", parsedReceiver.HostAccAddr,
-			"receiver", parsedReceiver.Destination,
-			"port", parsedReceiver.Port,
-			"channel", parsedReceiver.Channel,
+			"sender", receiver,
+			"receiver", metadata.Receiver,
+			"port", metadata.Port,
+			"channel", metadata.Channel,
 		)
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
@@ -146,29 +154,7 @@ func (k Keeper) ForwardTransferPacket(
 		inFlightPacket.RetriesRemaining--
 	}
 
-	// [Begin] this is a workaround to get the sequence of the packet transfer above in ibc-go v3 through v5
-	// since the sequence number is not returned by the `Transfer` or `SendTransfer` methods.
-	nextSequence, ok := k.channelKeeper.GetNextSequenceSend(ctx, parsedReceiver.Port, parsedReceiver.Channel)
-	if !ok {
-		return sdkerrors.Wrapf(
-			sdkerrors.ErrKeyNotFound,
-			fmt.Sprintf("unable to retrieve next send sequence on port: %s, channel: %s",
-				parsedReceiver.Port, parsedReceiver.Channel,
-			),
-		)
-	}
-	sequence := nextSequence - 1
-	if sequence <= 0 {
-		return sdkerrors.Wrapf(
-			sdkerrors.ErrKeyNotFound,
-			fmt.Sprintf("unexpected sequence: %d, should be greater than 0. port: %s, channel: %s",
-				sequence, parsedReceiver.Port, parsedReceiver.Channel,
-			),
-		)
-	}
-	// [End] sequence workaround
-
-	key := types.RefundPacketKey(parsedReceiver.Channel, parsedReceiver.Port, sequence)
+	key := types.RefundPacketKey(metadata.Channel, metadata.Port, res.Sequence)
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(inFlightPacket)
 	store.Set(key, bz)
@@ -231,11 +217,10 @@ func (k Keeper) HandleTimeout(
 	}
 
 	// send transfer again
-	receiver := &parser.ParsedReceiver{
-		HostAccAddr: data.Sender,
-		Destination: data.Receiver,
-		Channel:     packet.SourceChannel,
-		Port:        packet.SourcePort,
+	metadata := &ForwardMetadata{
+		Receiver: data.Receiver,
+		Channel:  packet.SourceChannel,
+		Port:     packet.SourcePort,
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -255,7 +240,7 @@ func (k Keeper) HandleTimeout(
 
 	var token = sdk.NewCoin(denom, amount)
 
-	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", receiver, token, uint8(inFlightPacket.RetriesRemaining), time.Duration(inFlightPacket.Timeout)*time.Nanosecond, nil)
+	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", data.Sender, metadata, token, uint8(inFlightPacket.RetriesRemaining), time.Duration(inFlightPacket.Timeout)*time.Nanosecond, nil)
 }
 
 func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
