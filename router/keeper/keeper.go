@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,12 +33,31 @@ type Keeper struct {
 	distrKeeper    types.DistributionKeeper
 }
 
+type PacketMetadata struct {
+	Forward *ForwardMetadata `json:"forward"`
+}
+
 type ForwardMetadata struct {
-	Receiver string        `json:"receiver"`
-	Port     string        `json:"port"`
-	Channel  string        `json:"channel"`
-	Timeout  time.Duration `json:"timeout"`
-	Retries  *uint8        `json:"retries"`
+	Receiver string          `json:"receiver"`
+	Port     string          `json:"port"`
+	Channel  string          `json:"channel"`
+	Timeout  time.Duration   `json:"timeout"`
+	Retries  *uint8          `json:"retries"`
+	Next     *PacketMetadata `json:"next"`
+}
+
+func (m *ForwardMetadata) Validate() error {
+	if m.Receiver == "" {
+		return fmt.Errorf("failed to validate forward metadata. receiver cannot be empty")
+	}
+	if m.Port == "" {
+		return fmt.Errorf("failed to validate forward metadata. port cannot be empty")
+	}
+	if m.Channel == "" {
+		return fmt.Errorf("failed to validate forward metadata. channel cannot be empty")
+	}
+
+	return nil
 }
 
 var (
@@ -112,18 +132,28 @@ func (k Keeper) ForwardTransferPacket(
 		}
 	}
 
+	msgTransfer := transfertypes.NewMsgTransfer(
+		metadata.Port,
+		metadata.Channel,
+		packetCoin,
+		receiver,
+		metadata.Receiver,
+		DefaultTransferPacketTimeoutHeight,
+		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
+	)
+
+	if metadata.Next != nil {
+		memo, err := json.Marshal(metadata.Next)
+		if err != nil {
+			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+		}
+		msgTransfer.Memo = string(memo)
+	}
+
 	// send tokens to destination
 	res, err := k.transferKeeper.Transfer(
 		sdk.WrapSDKContext(ctx),
-		transfertypes.NewMsgTransfer(
-			metadata.Port,
-			metadata.Channel,
-			packetCoin,
-			receiver,
-			metadata.Receiver,
-			DefaultTransferPacketTimeoutHeight,
-			uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
-		),
+		msgTransfer,
 	)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",

@@ -230,32 +230,29 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	var metadata *keeper.ForwardMetadata
-	err := json.Unmarshal([]byte(data.Memo), metadata)
-	if err != nil {
+	m := &keeper.PacketMetadata{}
+	err := json.Unmarshal([]byte(data.Memo), m)
+	if err != nil || m.Forward == nil {
 		// not a packet that should be forwarded
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
-	// Modify packet data to process packet transfer for this chain, omitting forwarding info
-	newData := data
-	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
-	if err != nil {
+	metadata := m.Forward
+
+	if err := metadata.Validate(); err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
-	newPacket := packet
-	newPacket.Data = bz
 
-	ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
+	ack := am.app.OnRecvPacket(ctx, packet, relayer)
 	if ack.Success() {
 		// recalculate denom, skip checks that were already done in app.OnRecvPacket
 		var err error
 		// TODO put denom handling in separate function
 		var denom string
-		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
+		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), data.Denom) {
 			// remove prefix added by sender chain
 			voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
-			unprefixedDenom := newData.Denom[len(voucherPrefix):]
+			unprefixedDenom := data.Denom[len(voucherPrefix):]
 
 			// coin denomination used in sending from the escrow address
 			denom = unprefixedDenom
@@ -267,10 +264,10 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				denom = denomTrace.IBCDenom()
 			}
 		} else {
-			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
+			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + data.Denom
 			denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 		}
-		unit, err := sdk.ParseUint(newData.Amount)
+		unit, err := sdk.ParseUint(data.Amount)
 		if err != nil {
 			channeltypes.NewErrorAcknowledgement(err.Error())
 		}
