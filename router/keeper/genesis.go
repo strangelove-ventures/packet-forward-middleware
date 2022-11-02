@@ -9,6 +9,7 @@ import (
 func (k Keeper) InitGenesis(ctx sdk.Context, state types.GenesisState) {
 	k.SetParams(ctx, state.Params)
 
+	// Initialize store refund path for forwarded packets in genesis state that have not yet been acked.
 	store := ctx.KVStore(k.storeKey)
 	for key, value := range state.InFlightPackets {
 		bz := k.cdc.MustMarshal(&value)
