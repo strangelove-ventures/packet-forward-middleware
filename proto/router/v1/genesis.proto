@@ -2,12 +2,22 @@ syntax = "proto3";
 
 package router.v1;
 
-option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v2/router/types";
+option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v6/router/types";
 
 import "gogoproto/gogo.proto";
 
 // GenesisState defines the router genesis state
-message GenesisState { Params params = 1 [ (gogoproto.nullable) = false ]; }
+
+message GenesisState {
+  Params params = 1 [ (gogoproto.nullable) = false ];
+
+  // key - information about forwarded packet: src_channel (parsedReceiver.Channel), src_port (parsedReceiver.Port), sequence
+  // value - information about original packet for refunding if necessary: retries, srcPacketSender, srcPacket.DestinationChannel, srcPacket.DestinationPort
+  map<string, InFlightPacket> in_flight_packets = 2 [
+    (gogoproto.moretags) = "yaml:\"in_flight_packets\"",
+    (gogoproto.nullable) = false
+  ];
+}
 
 // Params defines the set of IBC router parameters.
 message Params {
@@ -16,4 +26,13 @@ message Params {
     (gogoproto.customtype) = "github.com/cosmos/cosmos-sdk/types.Dec",
     (gogoproto.nullable) = false
   ];
+}
+
+// InFlightPacket contains information about original packet for refunding if necessary.
+message InFlightPacket {
+  string original_sender_address = 1;
+  string refund_channel_id = 2;
+  string refund_port_id = 3;
+  int32 retries_remaining = 4;
+  uint64 timeout = 5;
 }

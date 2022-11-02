@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"time"
 
 	"cosmossdk.io/math"
 	"github.com/armon/go-metrics"
@@ -12,20 +13,21 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v5/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
+	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v6/modules/core/exported"
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/client/cli"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/parser"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/client/cli"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/parser"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
 
@@ -88,13 +90,26 @@ type AppModule struct {
 	AppModuleBasic
 	keeper keeper.Keeper
 	app    porttypes.IBCModule
+
+	retriesOnTimeout uint8
+	forwardTimeout   time.Duration
+	refundTimeout    time.Duration
 }
 
 // NewAppModule creates a new router module
-func NewAppModule(k keeper.Keeper, app porttypes.IBCModule) AppModule {
+func NewAppModule(
+	k keeper.Keeper,
+	app porttypes.IBCModule,
+	retriesOnTimeout uint8,
+	forwardTimeout time.Duration,
+	refundTimeout time.Duration,
+) AppModule {
 	return AppModule{
-		keeper: k,
-		app:    app,
+		keeper:           k,
+		app:              app,
+		retriesOnTimeout: retriesOnTimeout,
+		forwardTimeout:   forwardTimeout,
+		refundTimeout:    refundTimeout,
 	}
 }
 
@@ -230,7 +245,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	// Modify packet data to process packet transfer for this chain, omitting forwarding info
 	newData := data
-	newData.Receiver = parsedReceiver.HostAccAddr.String()
+	newData.Receiver = parsedReceiver.HostAccAddr
 	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement(err)
@@ -268,8 +283,23 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		}
 		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
 
-		err = am.keeper.ForwardTransferPacket(ctx, parsedReceiver, token, []metrics.Label{})
+		var timeout time.Duration
+		if parsedReceiver.Timeout.Nanoseconds() > 0 {
+			timeout = parsedReceiver.Timeout
+		} else {
+			timeout = am.forwardTimeout
+		}
+
+		var retries uint8
+		if parsedReceiver.ForwardRetries != nil {
+			retries = *parsedReceiver.ForwardRetries
+		} else {
+			retries = am.retriesOnTimeout
+		}
+
+		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, retries, timeout, []metrics.Label{})
 		if err != nil {
+			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
 			ack = channeltypes.NewErrorAcknowledgement(err)
 		}
 	}
@@ -278,10 +308,35 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 // OnAcknowledgementPacket implements the IBCModule interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
-	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
+	if err := am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer); err != nil {
+		return err
+	}
+
+	var ack channeltypes.Acknowledgement
+	if err := json.Unmarshal(acknowledgement, &ack); err != nil {
+		return sdkerrors.Wrapf(sdkerrors.ErrJSONUnmarshal, err.Error())
+	}
+
+	if !ack.Success() {
+		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
+		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+		return nil
+	}
+
+	// For successful ack, we no longer need to track this packet.
+	am.keeper.RemoveInFlightPacket(ctx, packet)
+	return nil
 }
 
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
-	return am.app.OnTimeoutPacket(ctx, packet, relayer)
+	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
+		return err
+	}
+
+	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
+		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+	}
+
+	return nil
 }

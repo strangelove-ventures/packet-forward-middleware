@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
+	apptypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/router/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v2/test"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v6/test"
 	"github.com/stretchr/testify/require"
 )
 
@@ -163,7 +164,6 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	channel := "channel-0"
 	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
 	senderAccAddr := test.AccAddress()
-	hostAddrAcc := test.AccAddressFromBech32(t, hostAddr)
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
 	packetOrig := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
 	packetFw := transferPacket(t, hostAddr)
@@ -173,16 +173,18 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 
-		setup.Mocks.TransferKeeperMock.EXPECT().SendTransfer(
-			ctx,
-			port,
-			channel,
-			testCoin,
-			hostAddrAcc,
-			destAddr,
-			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
-		).Return(nil),
+		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
+			sdk.WrapSDKContext(ctx),
+			transfertypes.NewMsgTransfer(
+				port,
+				channel,
+				testCoin,
+				hostAddr,
+				destAddr,
+				keeper.DefaultTransferPacketTimeoutHeight,
+				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+			),
+		).Return(&apptypes.MsgTransferResponse{}, nil),
 	)
 
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
@@ -230,16 +232,18 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			hostAccAddr,
 		).Return(nil),
 
-		setup.Mocks.TransferKeeperMock.EXPECT().SendTransfer(
-			ctx,
-			port,
-			channel,
-			testCoin,
-			hostAccAddr,
-			destAddr,
-			keeper.DefaultTransferPacketTimeoutHeight,
-			keeper.DefaultTransferPacketTimeoutTimestamp+uint64(ctx.BlockTime().UnixNano()),
-		).Return(nil),
+		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
+			sdk.WrapSDKContext(ctx),
+			transfertypes.NewMsgTransfer(
+				port,
+				channel,
+				testCoin,
+				hostAddr,
+				destAddr,
+				keeper.DefaultTransferPacketTimeoutHeight,
+				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+			),
+		).Return(&apptypes.MsgTransferResponse{}, nil),
 	)
 
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
