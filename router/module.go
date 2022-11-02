@@ -13,6 +13,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/types/module"
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
@@ -311,13 +312,19 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 		return err
 	}
 
-	var ackErr channeltypes.Acknowledgement_Error
-	if err := json.Unmarshal(acknowledgement, &ackErr); err == nil && len(ackErr.Error) > 0 {
-		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
-	} else {
-		am.keeper.RemoveInFlightPacket(ctx, packet)
+	var ack channeltypes.Acknowledgement
+	if err := json.Unmarshal(acknowledgement, &ack); err != nil {
+		return sdkerrors.Wrapf(sdkerrors.ErrJSONUnmarshal, err.Error())
 	}
 
+	if !ack.Success() {
+		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
+		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+		return nil
+	}
+
+	// For successful ack, we no longer need to track this packet.
+	am.keeper.RemoveInFlightPacket(ctx, packet)
 	return nil
 }
 
