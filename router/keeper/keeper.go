@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -38,23 +37,24 @@ type PacketMetadata struct {
 }
 
 type ForwardMetadata struct {
-	Receiver string          `json:"receiver"`
-	Port     string          `json:"port"`
-	Channel  string          `json:"channel"`
-	Timeout  time.Duration   `json:"timeout"`
-	Retries  *uint8          `json:"retries"`
-	Next     *PacketMetadata `json:"next"`
+	SourceKey string
+	Receiver  string        `json:"receiver"`
+	Port      string        `json:"port"`
+	Channel   string        `json:"channel"`
+	Timeout   time.Duration `json:"timeout"`
+	Retries   *uint8        `json:"retries"`
+	Next      string        `json:"next"`
 }
 
 func (m *ForwardMetadata) Validate() error {
 	if m.Receiver == "" {
 		return fmt.Errorf("failed to validate forward metadata. receiver cannot be empty")
 	}
-	if m.Port == "" {
-		return fmt.Errorf("failed to validate forward metadata. port cannot be empty")
+	if err := host.PortIdentifierValidator(m.Port); err != nil {
+		return fmt.Errorf("failed to validate forward metadata: %w", err)
 	}
-	if m.Channel == "" {
-		return fmt.Errorf("failed to validate forward metadata. channel cannot be empty")
+	if err := host.ChannelIdentifierValidator(m.Channel); err != nil {
+		return fmt.Errorf("failed to validate forward metadata: %w", err)
 	}
 
 	return nil
@@ -142,13 +142,8 @@ func (k Keeper) ForwardTransferPacket(
 		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
 	)
 
-	if metadata.Next != nil {
-		memo, err := json.Marshal(metadata.Next)
-		if err != nil {
-			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
-		}
-		msgTransfer.Memo = string(memo)
-	}
+	// set memo for next transfer with next from this transfer.
+	msgTransfer.Memo = metadata.Next
 
 	// send tokens to destination
 	res, err := k.transferKeeper.Transfer(

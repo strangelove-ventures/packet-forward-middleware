@@ -304,12 +304,14 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 			Channel:  channel2,
 		},
 	}
+	next, err := json.Marshal(nextMetadata)
+	require.NoError(t, err)
 	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
 		Forward: &keeper.ForwardMetadata{
 			Receiver: hostAddr2,
 			Port:     port,
 			Channel:  channel,
-			Next:     nextMetadata,
+			Next:     string(next),
 		},
 	})
 	packet2 := transferPacket(t, hostAddr2, nextMetadata)
