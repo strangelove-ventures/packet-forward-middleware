@@ -148,20 +148,23 @@ func (k Keeper) ForwardTransferPacket(
 		msgTransfer.Memo = *metadata.Next
 	}
 
+	k.Logger(ctx).Debug("packetForwardMiddleware ForwardTransferPacket",
+		"port", metadata.Port, "channel", metadata.Channel,
+		"sender", receiver, "receiver", metadata.Receiver,
+		"amount", packetCoin.Amount.String(), "denom", packetCoin.Denom,
+	)
+
 	// send tokens to destination
 	res, err := k.transferKeeper.Transfer(
 		sdk.WrapSDKContext(ctx),
 		msgTransfer,
 	)
 	if err != nil {
-		k.Logger(ctx).Error("packetForwardMiddleware SendPacketTransfer error",
+		k.Logger(ctx).Error("packetForwardMiddleware ForwardTransferPacket error",
+			"port", metadata.Port, "channel", metadata.Channel,
+			"sender", receiver, "receiver", metadata.Receiver,
+			"amount", packetCoin.Amount.String(), "denom", packetCoin.Denom,
 			"error", err,
-			"amount", packetCoin.Amount.String(),
-			"denom", packetCoin.Denom,
-			"sender", receiver,
-			"receiver", metadata.Receiver,
-			"port", metadata.Port,
-			"channel", metadata.Channel,
 		)
 		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
@@ -357,18 +360,23 @@ func (k Keeper) RefundForwardedPacket(
 	memo, err := json.Marshal(packetMemo)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error marshaling json for multi-hop refund sequence",
-			"channel-id", channel,
-			"port-id", port,
-			"sender", sender,
-			"receiver", receiver,
 			"refund-sequence", refundSequence,
-			"amount", token.Amount,
-			"denom", token.Denom,
+			"channel-id", channel, "port-id", port,
+			"sender", sender, "receiver", receiver,
+			"amount", packetCoin.Amount, "denom", packetCoin.Denom,
+			"error", err,
 		)
 		return
 	}
 
 	msgTransfer.Memo = string(memo)
+
+	k.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket",
+		"refund-sequence", refundSequence,
+		"channel-id", channel, "port-id", port,
+		"sender", sender, "receiver", receiver,
+		"amount", packetCoin.Amount, "denom", packetCoin.Denom,
+	)
 
 	if _, err := k.transferKeeper.Transfer(
 		sdk.WrapSDKContext(ctx),
@@ -382,6 +390,7 @@ func (k Keeper) RefundForwardedPacket(
 			"refund-sequence", refundSequence,
 			"amount", token.Amount,
 			"denom", token.Denom,
+			"error", err,
 		)
 	}
 }
