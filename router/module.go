@@ -281,15 +281,23 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	metadata := m.Forward
 
 	if m.Forward.RefundSequence != nil {
-		if err := am.app.OnRecvPacket(ctx, packet, relayer); err != nil {
-			return err
+		ack := am.app.OnRecvPacket(ctx, packet, relayer)
+		if !ack.Success() {
+			return ack
 		}
+
+		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.DestinationChannel, packet.DestinationPort, *m.Forward.RefundSequence)
+		if inFlightPacket == nil {
+			// this is either not a forwarded packet, or it is the final destination for the refund.
+			return nil
+		}
+
 		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
 		if err != nil {
 			return channeltypes.NewErrorAcknowledgement(err.Error())
 		}
-		// pass along refund to previous hop in multi-hop, note that destination channel is used here since it is the OnRecvPacket.
-		am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, *m.Forward.RefundSequence, data.Receiver, token, am.refundTimeout)
+		// pass along refund to previous hop in multi-hop.
+		am.keeper.RefundForwardedPacket(ctx, inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence, data.Receiver, inFlightPacket.OriginalSenderAddress, token, am.refundTimeout)
 		return nil
 	}
 
@@ -298,31 +306,34 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	}
 
 	ack := am.app.OnRecvPacket(ctx, packet, relayer)
-	if ack.Success() {
-		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
-		if err != nil {
-			return channeltypes.NewErrorAcknowledgement(err.Error())
-		}
+	if !ack.Success() {
+		return ack
+	}
 
-		var timeout time.Duration
-		if metadata.Timeout.Nanoseconds() > 0 {
-			timeout = metadata.Timeout
-		} else {
-			timeout = am.forwardTimeout
-		}
+	token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(err.Error())
+	}
 
-		var retries uint8
-		if metadata.Retries != nil {
-			retries = *metadata.Retries
-		} else {
-			retries = am.retriesOnTimeout
-		}
+	var timeout time.Duration
+	if metadata.Timeout.Nanoseconds() > 0 {
+		timeout = metadata.Timeout
+	} else {
+		timeout = am.forwardTimeout
+	}
 
-		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
-		if err != nil {
-			am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data.Receiver, token, am.refundTimeout)
-			ack = channeltypes.NewErrorAcknowledgement(err.Error())
-		}
+	var retries uint8
+	if metadata.Retries != nil {
+		retries = *metadata.Retries
+	} else {
+		retries = am.retriesOnTimeout
+	}
+
+	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
+	if err != nil {
+		// Don't think this is needed since ack error will issue refund on previous chain.
+		// am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, packet.Sequence, data.Receiver, data.Sender, token, am.refundTimeout)
+		ack = channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 	return ack
 }
@@ -340,6 +351,10 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 	if !ack.Success() {
 		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
+		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
+		if inFlightPacket == nil {
+			return nil
+		}
 
 		var data transfertypes.FungibleTokenPacketData
 		if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
@@ -363,9 +378,16 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
-		token := sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount)
-
-		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data.Sender, token, am.refundTimeout)
+		am.keeper.RefundForwardedPacket(
+			ctx,
+			inFlightPacket.RefundChannelId,
+			inFlightPacket.RefundPortId,
+			inFlightPacket.RefundSequence,
+			data.Sender,
+			inFlightPacket.OriginalSenderAddress,
+			sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
+			am.refundTimeout,
+		)
 		return nil
 	}
 
@@ -381,6 +403,11 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	}
 
 	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
+		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
+		if inFlightPacket == nil {
+			return nil
+		}
+
 		var data transfertypes.FungibleTokenPacketData
 		if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
 			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from timeout for refund",
@@ -403,9 +430,17 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
-		token := sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount)
-
-		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data.Sender, token, am.refundTimeout)
+		am.keeper.RefundForwardedPacket(
+			ctx,
+			inFlightPacket.RefundChannelId,
+			inFlightPacket.RefundPortId,
+			inFlightPacket.RefundSequence,
+			data.Sender,
+			inFlightPacket.OriginalSenderAddress,
+			sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
+			am.refundTimeout,
+		)
+		return nil
 	}
 
 	return nil

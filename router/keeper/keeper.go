@@ -284,12 +284,18 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 	store.Delete(key)
 }
 
-func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port string, refundSequence uint64, sender string, token sdk.Coin, timeout time.Duration) {
+// GetAndClearInFlightPacket will fetch an InFlightPacket from the store, remove it if it exists, and return it.
+func (k Keeper) GetAndClearInFlightPacket(
+	ctx sdk.Context,
+	channel string,
+	port string,
+	sequence uint64,
+) *types.InFlightPacket {
 	store := ctx.KVStore(k.storeKey)
-	key := types.RefundPacketKey(channel, port, refundSequence)
+	key := types.RefundPacketKey(channel, port, sequence)
 	if !store.Has(key) {
 		// this is either not a forwarded packet, or it is the final destination for the refund.
-		return
+		return nil
 	}
 
 	bz := store.Get(key)
@@ -299,35 +305,65 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port stri
 
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
+	return &inFlightPacket
+}
+
+func (k Keeper) RefundForwardedPacket(
+	ctx sdk.Context,
+	channel string,
+	port string,
+	refundSequence uint64,
+	sender string,
+	receiver string,
+	token sdk.Coin,
+	timeout time.Duration,
+) {
+	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
+	packetAmount := token.Amount.Sub(feeAmount)
+	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
+	packetCoin := sdk.NewCoin(token.Denom, packetAmount)
+
+	// pay fees
+	if feeAmount.IsPositive() {
+		hostAccAddr, err := sdk.AccAddressFromBech32(receiver)
+		if err != nil {
+			return
+		}
+		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, hostAccAddr)
+		if err != nil {
+			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
+				"error", err,
+			)
+			return
+		}
+	}
 
 	msgTransfer := transfertypes.NewMsgTransfer(
-		inFlightPacket.RefundPortId,
-		inFlightPacket.RefundChannelId,
-		token,
+		port,
+		channel,
+		packetCoin,
 		sender,
-		inFlightPacket.OriginalSenderAddress,
+		receiver,
 		DefaultTransferPacketTimeoutHeight,
-		uint64(timeout.Nanoseconds())+uint64(ctx.BlockTime().UnixNano()),
+		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
 	)
 
 	packetMemo := &PacketMetadata{
 		Forward: &ForwardMetadata{
-			RefundSequence: &inFlightPacket.RefundSequence,
+			RefundSequence: &refundSequence,
 		},
 	}
 
 	memo, err := json.Marshal(packetMemo)
 	if err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error marshaling json for multi-hop refund sequence",
-			"key", string(key),
-			"sequence", refundSequence,
 			"channel-id", channel,
 			"port-id", port,
-			"original-sender-address", inFlightPacket.OriginalSenderAddress,
-			"refund-channel-id", inFlightPacket.RefundChannelId,
-			"refund-port-id", inFlightPacket.RefundPortId,
-			"refund-sequence", inFlightPacket.RefundSequence,
+			"sender", sender,
+			"receiver", receiver,
+			"refund-sequence", refundSequence,
 			"amount", token.Amount,
+			"denom", token.Denom,
 		)
 		return
 	}
@@ -339,15 +375,13 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port stri
 		msgTransfer,
 	); err != nil {
 		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for multi-hop refund",
-			"key", string(key),
-			"sequence", refundSequence,
 			"channel-id", channel,
 			"port-id", port,
-			"original-sender-address", inFlightPacket.OriginalSenderAddress,
-			"refund-channel-id", inFlightPacket.RefundChannelId,
-			"refund-port-id", inFlightPacket.RefundPortId,
+			"sender", sender,
+			"receiver", receiver,
+			"refund-sequence", refundSequence,
 			"amount", token.Amount,
-			"error", err,
+			"denom", token.Denom,
 		)
 	}
 }
