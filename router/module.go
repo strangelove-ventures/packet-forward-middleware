@@ -225,10 +225,16 @@ func (am AppModule) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string
 }
 
 // NextHopCoin assembles a token with the correct denom for the next hop.
-func (am AppModule) NextHopCoin(srcPort, srcChannel, dstPort, dstChannel string, denom string, amount string) (sdk.Coin, error) {
+func (am AppModule) NextHopCoin(ctx sdk.Context, srcPort, srcChannel, dstPort, dstChannel, denom, amount string) (sdk.Coin, error) {
 	// recalculate denom, skip checks that were already done in app.OnRecvPacket
 	var denomOut string
+
 	if transfertypes.ReceiverChainIsSource(srcPort, srcChannel, denom) {
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware NextHopCoin receiver chain is source",
+			"src_port", srcPort, "src_channel", srcChannel,
+			"dst_port", dstPort, "dst_channel", dstChannel,
+			"denom", denom, "amount", amount,
+		)
 		// remove prefix added by sender chain
 		voucherPrefix := transfertypes.GetDenomPrefix(srcPort, srcChannel)
 		unprefixedDenom := denom[len(voucherPrefix):]
@@ -243,6 +249,11 @@ func (am AppModule) NextHopCoin(srcPort, srcChannel, dstPort, dstChannel string,
 			denomOut = denomTrace.IBCDenom()
 		}
 	} else {
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware NextHopCoin sender chain is source",
+			"src_port", srcPort, "src_channel", srcChannel,
+			"dst_port", dstPort, "dst_channel", dstChannel,
+			"denom", denom, "amount", amount,
+		)
 		prefixedDenom := transfertypes.GetDenomPrefix(dstPort, dstChannel) + denom
 		denomOut = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 	}
@@ -273,7 +284,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		if err := am.app.OnRecvPacket(ctx, packet, relayer); err != nil {
 			return err
 		}
-		token, err := am.NextHopCoin(packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
 		if err != nil {
 			return channeltypes.NewErrorAcknowledgement(err.Error())
 		}
@@ -288,7 +299,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	ack := am.app.OnRecvPacket(ctx, packet, relayer)
 	if ack.Success() {
-		token, err := am.NextHopCoin(packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
 		if err != nil {
 			return channeltypes.NewErrorAcknowledgement(err.Error())
 		}
@@ -341,7 +352,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
-		token, err := am.NextHopCoin(packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+		token, err := am.NextHopCoin(ctx, packet.DestinationPort, packet.DestinationChannel, packet.SourcePort, packet.SourceChannel, data.Denom, data.Amount)
 		if err != nil {
 			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin for refund on ack",
 				"sequence", packet.Sequence,
@@ -379,7 +390,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
-		token, err := am.NextHopCoin(packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+		token, err := am.NextHopCoin(ctx, packet.DestinationPort, packet.DestinationChannel, packet.SourcePort, packet.SourceChannel, data.Denom, data.Amount)
 		if err != nil {
 			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin for refund on timeout",
 				"sequence", packet.Sequence,
