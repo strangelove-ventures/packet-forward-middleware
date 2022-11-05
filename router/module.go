@@ -313,6 +313,17 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
 		token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
 
+		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
+		ibcDenom := denomTrace.IBCDenom()
+
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnRecvPacket",
+			"sequence", packet.Sequence,
+			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+			"amount", data.Amount,
+			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom, "refund_denom", inFlightPacket.RefundDenom,
+		)
+
 		// pass along refund to previous hop in multi-hop.
 		am.keeper.RefundForwardedPacket(ctx, inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence, data.Receiver, inFlightPacket.OriginalSenderAddress, token, am.refundTimeout)
 		return nil
@@ -415,6 +426,18 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
+		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
+		ibcDenom := denomTrace.IBCDenom()
+
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnAcknowledgementPacket",
+			"sequence", packet.Sequence,
+			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+			"amount", data.Amount,
+			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom,
+			"refund_denom", inFlightPacket.RefundDenom,
+		)
+
 		am.keeper.RefundForwardedPacket(
 			ctx,
 			inFlightPacket.RefundChannelId,
@@ -422,7 +445,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
+			sdk.NewCoin(inFlightPacket.RefundDenom, amount),
 			am.refundTimeout,
 		)
 		return nil
@@ -487,6 +510,18 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
+		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
+		ibcDenom := denomTrace.IBCDenom()
+
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnTimeoutPacket",
+			"sequence", packet.Sequence,
+			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+			"amount", data.Amount,
+			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom,
+			"refund_denom", inFlightPacket.RefundDenom,
+		)
+
 		am.keeper.RefundForwardedPacket(
 			ctx,
 			inFlightPacket.RefundChannelId,
@@ -494,7 +529,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount),
+			sdk.NewCoin(inFlightPacket.RefundDenom, amount),
 			am.refundTimeout,
 		)
 		return nil
