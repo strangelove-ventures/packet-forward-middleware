@@ -299,9 +299,24 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			return nil
 		}
 
-		amount, ok := sdk.NewIntFromString(data.Amount)
-		if !ok {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for multi-hop refund",
+		// amount, ok := sdk.NewIntFromString(data.Amount)
+		// if !ok {
+		// 	am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for multi-hop refund",
+		// 		"sequence", packet.Sequence,
+		// 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+		// 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+		// 		"amount", data.Amount, "denom", data.Denom,
+		// 		"error", err,
+		// 	)
+		// 	return nil
+		// }
+
+		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
+		// token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
+
+		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
+		if err != nil {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin",
 				"sequence", packet.Sequence,
 				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
@@ -310,8 +325,6 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			)
 			return nil
 		}
-		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
-		token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
 
 		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
 		ibcDenom := denomTrace.IBCDenom()
@@ -445,7 +458,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(inFlightPacket.RefundDenom, amount),
+			sdk.NewCoin(data.Denom, amount),
 			am.refundTimeout,
 		)
 		return nil
@@ -529,7 +542,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(inFlightPacket.RefundDenom, amount),
+			sdk.NewCoin(data.Denom, amount),
 			am.refundTimeout,
 		)
 		return nil
