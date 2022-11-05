@@ -352,16 +352,18 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
-		token, err := am.NextHopCoin(ctx, packet.DestinationPort, packet.DestinationChannel, packet.SourcePort, packet.SourceChannel, data.Denom, data.Amount)
-		if err != nil {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin for refund on ack",
+		amount, ok := sdk.NewIntFromString(data.Amount)
+		if !ok {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on timeout",
 				"sequence", packet.Sequence,
 				"channel-id", packet.SourceChannel,
 				"port-id", packet.SourcePort,
-				"error", err,
+				"amount", data.Amount,
 			)
 			return nil
 		}
+
+		token := sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount)
 
 		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data.Sender, token, am.refundTimeout)
 		return nil
@@ -390,16 +392,18 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
-		token, err := am.NextHopCoin(ctx, packet.DestinationPort, packet.DestinationChannel, packet.SourcePort, packet.SourceChannel, data.Denom, data.Amount)
-		if err != nil {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin for refund on timeout",
+		amount, ok := sdk.NewIntFromString(data.Amount)
+		if !ok {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on timeout",
 				"sequence", packet.Sequence,
 				"channel-id", packet.SourceChannel,
 				"port-id", packet.SourcePort,
-				"error", err,
+				"amount", data.Amount,
 			)
 			return nil
 		}
+
+		token := sdk.NewCoin(transfertypes.ParseDenomTrace(data.Denom).IBCDenom(), amount)
 
 		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data.Sender, token, am.refundTimeout)
 	}
