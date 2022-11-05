@@ -10,8 +10,10 @@ import "gogoproto/gogo.proto";
 message GenesisState {
   Params params = 1 [ (gogoproto.nullable) = false ];
 
-  // key - information about forwarded packet: src_channel (parsedReceiver.Channel), src_port (parsedReceiver.Port), sequence
-  // value - information about original packet for refunding if necessary: retries, srcPacketSender, srcPacket.DestinationChannel, srcPacket.DestinationPort
+  // key - information about forwarded packet: src_channel
+  // (parsedReceiver.Channel), src_port (parsedReceiver.Port), sequence value -
+  // information about original packet for refunding if necessary: retries,
+  // srcPacketSender, srcPacket.DestinationChannel, srcPacket.DestinationPort
   map<string, InFlightPacket> in_flight_packets = 2 [
     (gogoproto.moretags) = "yaml:\"in_flight_packets\"",
     (gogoproto.nullable) = false
@@ -27,12 +29,14 @@ message Params {
   ];
 }
 
-// InFlightPacket contains information about original packet for refunding if necessary.
+// InFlightPacket contains information about original packet for refunding if
+// necessary.
 message InFlightPacket {
   string original_sender_address = 1;
   string refund_channel_id = 2;
   string refund_port_id = 3;
   uint64 refund_sequence = 4;
-  int32 retries_remaining = 5;
-  uint64 timeout = 6;
+  string refund_denom = 5;
+  int32 retries_remaining = 6;
+  uint64 timeout = 7;
 }

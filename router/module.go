@@ -299,10 +299,20 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			return nil
 		}
 
-		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
-		if err != nil {
-			return channeltypes.NewErrorAcknowledgement(err.Error())
+		amount, ok := sdk.NewIntFromString(data.Amount)
+		if !ok {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for multi-hop refund",
+				"sequence", packet.Sequence,
+				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+				"amount", data.Amount, "denom", data.Denom,
+				"error", err,
+			)
+			return nil
 		}
+		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
+		token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
+
 		// pass along refund to previous hop in multi-hop.
 		am.keeper.RefundForwardedPacket(ctx, inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence, data.Receiver, inFlightPacket.OriginalSenderAddress, token, am.refundTimeout)
 		return nil
@@ -336,7 +346,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		retries = am.retriesOnTimeout
 	}
 
-	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
+	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, data.Denom, retries, timeout, []metrics.Label{})
 	if err != nil {
 		// Don't think this is needed since ack error will issue refund on previous chain.
 		// am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, packet.Sequence, data.Receiver, data.Sender, token, am.refundTimeout)

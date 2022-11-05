@@ -108,6 +108,7 @@ func (k Keeper) ForwardTransferPacket(
 	receiver string,
 	metadata *ForwardMetadata,
 	token sdk.Coin,
+	refundDenom string,
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
@@ -179,6 +180,7 @@ func (k Keeper) ForwardTransferPacket(
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RefundSequence:        srcPacket.Sequence,
+			RefundDenom:           refundDenom,
 			RetriesRemaining:      int32(maxRetries),
 			Timeout:               uint64(timeout.Nanoseconds()),
 		}
@@ -272,7 +274,20 @@ func (k Keeper) HandleTimeout(
 
 	var token = sdk.NewCoin(denom, amount)
 
-	return k.ForwardTransferPacket(ctx, &inFlightPacket, channeltypes.Packet{}, "", data.Sender, metadata, token, uint8(inFlightPacket.RetriesRemaining), time.Duration(inFlightPacket.Timeout)*time.Nanosecond, nil)
+	// srcPacket, srcPacketSender, and refundDenom are empty because inFlightPacket is non-nil.
+	return k.ForwardTransferPacket(
+		ctx,
+		&inFlightPacket,
+		channeltypes.Packet{},
+		"",
+		data.Sender,
+		metadata,
+		token,
+		"",
+		uint8(inFlightPacket.RetriesRemaining),
+		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
+		nil,
+	)
 }
 
 func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
