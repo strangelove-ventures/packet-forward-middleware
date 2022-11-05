@@ -38,10 +38,10 @@ type PacketMetadata struct {
 }
 
 type ForwardMetadata struct {
-	Receiver       string        `json:"receiver"`
-	Port           string        `json:"port"`
-	Channel        string        `json:"channel"`
-	Timeout        time.Duration `json:"timeout"`
+	Receiver       string        `json:"receiver,omitempty"`
+	Port           string        `json:"port,omitempty"`
+	Channel        string        `json:"channel,omitempty"`
+	Timeout        time.Duration `json:"timeout,omitempty"`
 	Retries        *uint8        `json:"retries,omitempty"`
 	Next           *string       `json:"next,omitempty"`
 	RefundSequence *uint64       `json:"refund_sequence,omitempty"`
@@ -284,7 +284,7 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 	store.Delete(key)
 }
 
-func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port string, refundSequence uint64, packetData transfertypes.FungibleTokenPacketData, timeout time.Duration) {
+func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port string, refundSequence uint64, sender string, token sdk.Coin, timeout time.Duration) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(channel, port, refundSequence)
 	if !store.Has(key) {
@@ -300,27 +300,11 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port stri
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 
-	amount, ok := sdk.NewIntFromString(packetData.Amount)
-	if !ok {
-		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for multi-hop refund",
-			"key", string(key),
-			"sequence", refundSequence,
-			"channel-id", channel,
-			"port-id", port,
-			"original-sender-address", inFlightPacket.OriginalSenderAddress,
-			"refund-channel-id", inFlightPacket.RefundChannelId,
-			"refund-port-id", inFlightPacket.RefundPortId,
-			"refund-sequence", inFlightPacket.RefundSequence,
-			"amount", packetData.Amount,
-		)
-		return
-	}
-
 	msgTransfer := transfertypes.NewMsgTransfer(
 		inFlightPacket.RefundPortId,
 		inFlightPacket.RefundChannelId,
-		sdk.NewCoin(transfertypes.ParseDenomTrace(packetData.Denom).IBCDenom(), amount),
-		packetData.Sender,
+		token,
+		sender,
 		inFlightPacket.OriginalSenderAddress,
 		DefaultTransferPacketTimeoutHeight,
 		uint64(timeout.Nanoseconds())+uint64(ctx.BlockTime().UnixNano()),
@@ -343,7 +327,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port stri
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
 			"refund-sequence", inFlightPacket.RefundSequence,
-			"amount", packetData.Amount,
+			"amount", token.Amount,
 		)
 		return
 	}
@@ -362,7 +346,7 @@ func (k Keeper) RefundForwardedPacket(ctx sdk.Context, channel string, port stri
 			"original-sender-address", inFlightPacket.OriginalSenderAddress,
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
-			"amount", packetData.Amount,
+			"amount", token.Amount,
 			"error", err,
 		)
 	}
