@@ -240,6 +240,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	metadata := m.Forward
 
+	if m.Forward.RefundSequence != nil {
+		// pass along refund to previous hop in multi-hop, note that destination channel is used here since it is the OnRecvPacket.
+		am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, *m.Forward.RefundSequence, data, am.refundTimeout)
+		return am.app.OnRecvPacket(ctx, packet, relayer)
+	}
+
 	if err := metadata.Validate(); err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
@@ -290,7 +296,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 		if err != nil {
-			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+			am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data, am.refundTimeout)
 			ack = channeltypes.NewErrorAcknowledgement(err.Error())
 		}
 	}
@@ -310,7 +316,19 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 	if !ack.Success() {
 		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
-		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+
+		var data transfertypes.FungibleTokenPacketData
+		if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from ack for refund",
+				"sequence", packet.Sequence,
+				"channel-id", packet.SourceChannel,
+				"port-id", packet.SourcePort,
+				"error", err,
+			)
+			return nil
+		}
+
+		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data, am.refundTimeout)
 		return nil
 	}
 
@@ -326,7 +344,18 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	}
 
 	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
-		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+		var data transfertypes.FungibleTokenPacketData
+		if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from timeout for refund",
+				"sequence", packet.Sequence,
+				"channel-id", packet.SourceChannel,
+				"port-id", packet.SourcePort,
+				"error", err,
+			)
+			return nil
+		}
+
+		am.keeper.RefundForwardedPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence, data, am.refundTimeout)
 	}
 
 	return nil
