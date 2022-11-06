@@ -282,21 +282,6 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 			return nil
 		}
 
-		// amount, ok := sdk.NewIntFromString(data.Amount)
-		// if !ok {
-		// 	am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for multi-hop refund",
-		// 		"sequence", packet.Sequence,
-		// 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-		// 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		// 		"amount", data.Amount, "denom", data.Denom,
-		// 		"error", err,
-		// 	)
-		// 	return nil
-		// }
-
-		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
-		// token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
-
 		denomOnThisChain := GetDenomForThisChain(
 			packet.SourcePort, packet.SourceChannel,
 			packet.DestinationPort, packet.DestinationChannel,
@@ -381,7 +366,6 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 // OnAcknowledgementPacket implements the IBCModule interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
-	// TODO only need to do unmarshalling in !ack.Success() branch below. Using this only for debug log.
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
 		am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from ack packet",
@@ -416,18 +400,6 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
-		// TODO uncomment this once debug log removed above.
-		// var data transfertypes.FungibleTokenPacketData
-		// if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		// 	am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from ack for refund",
-		//		"sequence", packet.Sequence,
-		//		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-		//		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		// 		"error", err,
-		// 	)
-		// 	return nil
-		// }
-
 		amount, ok := sdk.NewIntFromString(data.Amount)
 		if !ok {
 			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on ack",
@@ -451,7 +423,6 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 			"amount", data.Amount,
 			"raw_denom", data.Denom, "denom_on_this_chain", denom,
-			"refund_denom", inFlightPacket.RefundDenom,
 		)
 
 		am.keeper.RefundForwardedPacket(
@@ -479,7 +450,6 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
-	// TODO only need to do unmarshalling in HandleTimeout error branch below. Using this only for debug log.
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
 		am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from timeout packet",
@@ -508,18 +478,6 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
-		// TODO uncomment this once debug log removed above.
-		// var data transfertypes.FungibleTokenPacketData
-		// if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		// 	am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from timeout for refund",
-		//		"sequence", packet.Sequence,
-		//		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-		//		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		// 		"error", err,
-		// 	)
-		// 	return nil
-		// }
-
 		amount, ok := sdk.NewIntFromString(data.Amount)
 		if !ok {
 			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on timeout",
@@ -542,8 +500,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_on_this_chain", denom,
-			"refund_denom", inFlightPacket.RefundDenom,
+			"raw_denom", data.Denom, "denom", denom,
 		)
 
 		am.keeper.RefundForwardedPacket(

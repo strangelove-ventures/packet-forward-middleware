@@ -36,7 +36,6 @@ message InFlightPacket {
   string refund_channel_id = 2;
   string refund_port_id = 3;
   uint64 refund_sequence = 4;
-  string refund_denom = 5;
-  int32 retries_remaining = 6;
-  uint64 timeout = 7;
+  int32 retries_remaining = 5;
+  uint64 timeout = 6;
 }

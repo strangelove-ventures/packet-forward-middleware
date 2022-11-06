@@ -179,7 +179,6 @@ func (k Keeper) ForwardTransferPacket(
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RefundSequence:        srcPacket.Sequence,
-			RefundDenom:           token.Denom,
 			RetriesRemaining:      int32(maxRetries),
 			Timeout:               uint64(timeout.Nanoseconds()),
 		}
