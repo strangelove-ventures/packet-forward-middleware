@@ -261,19 +261,23 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	err := json.Unmarshal([]byte(data.Memo), m)
 	if err != nil || m.Forward == nil {
 		// not a packet that should be forwarded
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
 	metadata := m.Forward
 
 	if m.Forward.RefundSequence != nil {
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundSequence exists")
 		ack := am.app.OnRecvPacket(ctx, packet, relayer)
 		if !ack.Success() {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware RefundSequence exists but ack failed")
 			return ack
 		}
 
 		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.DestinationChannel, packet.DestinationPort, *m.Forward.RefundSequence)
 		if inFlightPacket == nil {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware RefundSequence exists but inFlightPacket is nil")
 			// this is either not a forwarded packet, or it is the final destination for the refund.
 			return nil
 		}
@@ -308,6 +312,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 				"amount", data.Amount, "denom", data.Denom,
 				"error", err,
 			)
+			return nil
 		}
 
 		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnRecvPacket",
@@ -400,8 +405,8 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 	}
 
 	var ack channeltypes.Acknowledgement
-	if err := json.Unmarshal(acknowledgement, &ack); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrJSONUnmarshal, err.Error())
+	if err := channeltypes.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
+		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
 	if !ack.Success() {
