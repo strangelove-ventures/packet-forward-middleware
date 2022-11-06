@@ -467,8 +467,13 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 		return nil
 	}
 
+	// TODO: this assumption no longer works, because multi-hop refunds depend
+	// on the InFlightPacket being in the store on previous chains. Need to find a better way to cleanup InFlightPackets,
+	// or curry into Next metadata so that the entire refund path can be re-created.
+
 	// For successful ack, we no longer need to track this packet.
-	am.keeper.RemoveInFlightPacket(ctx, packet)
+	// am.keeper.RemoveInFlightPacket(ctx, packet)
+
 	return nil
 }
 
