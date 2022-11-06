@@ -203,10 +203,16 @@ func (k Keeper) ForwardTransferPacket(
 
 	if inFlightPacket == nil {
 		inFlightPacket = &types.InFlightPacket{
+			PacketData:            srcPacket.Data,
 			OriginalSenderAddress: srcPacketSender,
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RefundSequence:        srcPacket.Sequence,
+			PacketSrcPortId:       srcPacket.SourcePort,
+			PacketSrcChannelId:    srcPacket.SourceChannel,
+
+			PacketTimeoutTimestamp: srcPacket.TimeoutTimestamp,
+			PacketTimeoutHeight:    srcPacket.TimeoutHeight.String(),
 
 			RetriesRemaining: int32(maxRetries),
 			Timeout:          uint64(timeout.Nanoseconds()),
