@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -38,13 +37,12 @@ type PacketMetadata struct {
 }
 
 type ForwardMetadata struct {
-	Receiver       string        `json:"receiver,omitempty"`
-	Port           string        `json:"port,omitempty"`
-	Channel        string        `json:"channel,omitempty"`
-	Timeout        time.Duration `json:"timeout,omitempty"`
-	Retries        *uint8        `json:"retries,omitempty"`
-	Next           *string       `json:"next,omitempty"`
-	RefundSequence *uint64       `json:"refund_sequence,omitempty"`
+	Receiver string        `json:"receiver,omitempty"`
+	Port     string        `json:"port,omitempty"`
+	Channel  string        `json:"channel,omitempty"`
+	Timeout  time.Duration `json:"timeout,omitempty"`
+	Retries  *uint8        `json:"retries,omitempty"`
+	Next     *string       `json:"next,omitempty"`
 }
 
 func (m *ForwardMetadata) Validate() error {
@@ -98,6 +96,36 @@ func NewKeeper(
 // Logger returns a module-specific logger.
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
+}
+
+func (k Keeper) WriteAcknowledgementForForwardedPacket(
+	ctx sdk.Context,
+	sequence uint64,
+	port, channel string,
+	ack channeltypes.Acknowledgement,
+) error {
+	inFlightPacket := k.GetAndClearInFlightPacket(ctx, channel, port, sequence)
+	if inFlightPacket == nil {
+		// not a forwarded packet
+		return nil
+	}
+
+	// Lookup module by channel capability
+	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
+	if err != nil {
+		return sdkerrors.Wrap(err, "could not retrieve module from port-id")
+	}
+
+	return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+		Data:               inFlightPacket.PacketData,
+		Sequence:           inFlightPacket.RefundSequence,
+		SourcePort:         inFlightPacket.PacketSrcPortId,
+		SourceChannel:      inFlightPacket.PacketSrcChannelId,
+		DestinationPort:    inFlightPacket.RefundPortId,
+		DestinationChannel: inFlightPacket.RefundChannelId,
+		TimeoutHeight:      clienttypes.MustParseHeight(inFlightPacket.PacketTimeoutHeight),
+		TimeoutTimestamp:   inFlightPacket.PacketTimeoutTimestamp,
+	}, ack)
 }
 
 func (k Keeper) ForwardTransferPacket(
@@ -179,8 +207,9 @@ func (k Keeper) ForwardTransferPacket(
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RefundSequence:        srcPacket.Sequence,
-			RetriesRemaining:      int32(maxRetries),
-			Timeout:               uint64(timeout.Nanoseconds()),
+
+			RetriesRemaining: int32(maxRetries),
+			Timeout:          uint64(timeout.Nanoseconds()),
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -325,88 +354,4 @@ func (k Keeper) GetAndClearInFlightPacket(
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 	return &inFlightPacket
-}
-
-func (k Keeper) RefundForwardedPacket(
-	ctx sdk.Context,
-	channel string,
-	port string,
-	refundSequence uint64,
-	sender string,
-	receiver string,
-	token sdk.Coin,
-	timeout time.Duration,
-) {
-	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
-	packetAmount := token.Amount.Sub(feeAmount)
-	feeCoins := sdk.Coins{sdk.NewCoin(token.Denom, feeAmount)}
-	packetCoin := sdk.NewCoin(token.Denom, packetAmount)
-
-	// pay fees
-	if feeAmount.IsPositive() {
-		hostAccAddr, err := sdk.AccAddressFromBech32(receiver)
-		if err != nil {
-			return
-		}
-		err = k.distrKeeper.FundCommunityPool(ctx, feeCoins, hostAccAddr)
-		if err != nil {
-			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
-				"error", err,
-			)
-			return
-		}
-	}
-
-	msgTransfer := transfertypes.NewMsgTransfer(
-		port,
-		channel,
-		packetCoin,
-		sender,
-		receiver,
-		DefaultTransferPacketTimeoutHeight,
-		uint64(ctx.BlockTime().UnixNano())+uint64(timeout.Nanoseconds()),
-	)
-
-	packetMemo := &PacketMetadata{
-		Forward: &ForwardMetadata{
-			RefundSequence: &refundSequence,
-		},
-	}
-
-	memo, err := json.Marshal(packetMemo)
-	if err != nil {
-		k.Logger(ctx).Error("packetForwardMiddleware error marshaling json for multi-hop refund sequence",
-			"refund-sequence", refundSequence,
-			"channel-id", channel, "port-id", port,
-			"sender", sender, "receiver", receiver,
-			"amount", packetCoin.Amount, "denom", packetCoin.Denom,
-			"error", err,
-		)
-		return
-	}
-
-	msgTransfer.Memo = string(memo)
-
-	k.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket",
-		"refund-sequence", refundSequence,
-		"channel-id", channel, "port-id", port,
-		"sender", sender, "receiver", receiver,
-		"amount", packetCoin.Amount, "denom", packetCoin.Denom,
-	)
-
-	if _, err := k.transferKeeper.Transfer(
-		sdk.WrapSDKContext(ctx),
-		msgTransfer,
-	); err != nil {
-		k.Logger(ctx).Error("packetForwardMiddleware error sending packet transfer for multi-hop refund",
-			"channel-id", channel,
-			"port-id", port,
-			"sender", sender,
-			"receiver", receiver,
-			"refund-sequence", refundSequence,
-			"amount", token.Amount,
-			"denom", token.Denom,
-			"error", err,
-		)
-	}
 }

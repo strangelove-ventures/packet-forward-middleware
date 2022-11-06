@@ -267,64 +267,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	metadata := m.Forward
 
-	if m.Forward.RefundSequence != nil {
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundSequence exists")
-		ack := am.app.OnRecvPacket(ctx, packet, relayer)
-		if !ack.Success() {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware RefundSequence exists but ack failed")
-			return ack
-		}
-
-		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.DestinationChannel, packet.DestinationPort, *m.Forward.RefundSequence)
-		if inFlightPacket == nil {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware RefundSequence exists but inFlightPacket is nil")
-			// this is either not a forwarded packet, or it is the final destination for the refund.
-			return nil
-		}
-
-		denomOnThisChain := GetDenomForThisChain(
-			packet.SourcePort, packet.SourceChannel,
-			packet.DestinationPort, packet.DestinationChannel,
-			data.Denom,
-		)
-
-		amountInt, ok := sdk.NewIntFromString(data.Amount)
-		if !ok {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount for refund",
-				"sequence", packet.Sequence,
-				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-				"amount", data.Amount, "denom", data.Denom,
-				"error", err,
-			)
-			return nil
-		}
-
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnRecvPacket",
-			"sequence", packet.Sequence,
-			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_on_this_chain", denomOnThisChain,
-		)
-
-		// pass along refund to previous hop in multi-hop.
-		am.keeper.RefundForwardedPacket(
-			ctx,
-			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence,
-			data.Receiver, inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(denomOnThisChain, amountInt),
-			am.refundTimeout,
-		)
-		return nil
-	}
-
 	if err := metadata.Validate(); err != nil {
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
 	ack := am.app.OnRecvPacket(ctx, packet, relayer)
-	if !ack.Success() {
+	if ack == nil || !ack.Success() {
 		return ack
 	}
 
@@ -357,11 +305,12 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 
 	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 	if err != nil {
-		// Don't think this is needed since ack error will issue refund on previous chain.
-		// am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, packet.Sequence, data.Receiver, data.Sender, token, am.refundTimeout)
-		ack = channeltypes.NewErrorAcknowledgement(err.Error())
+		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
-	return ack
+
+	// returning nil ack will prevent WriteAcknowledgement from occurring for forwarded packet.
+	// This is intentional so that the acknowledgement will be written later based on the ack/timeout of the forwarded packet.
+	return nil
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
@@ -393,59 +342,8 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
-	if !ack.Success() {
-		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
-		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
-		if inFlightPacket == nil {
-			return nil
-		}
-
-		amount, ok := sdk.NewIntFromString(data.Amount)
-		if !ok {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on ack",
-				"sequence", packet.Sequence,
-				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-				"amount", data.Amount,
-			)
-			return nil
-		}
-
-		denom := data.Denom
-		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
-		if denomTrace.Path != "" {
-			denom = denomTrace.IBCDenom()
-		}
-
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnAcknowledgementPacket",
-			"sequence", packet.Sequence,
-			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_on_this_chain", denom,
-		)
-
-		am.keeper.RefundForwardedPacket(
-			ctx,
-			inFlightPacket.RefundChannelId,
-			inFlightPacket.RefundPortId,
-			inFlightPacket.RefundSequence,
-			data.Sender,
-			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(denom, amount),
-			am.refundTimeout,
-		)
-		return nil
-	}
-
-	// TODO: this assumption no longer works, because multi-hop refunds depend
-	// on the InFlightPacket being in the store on previous chains. Need to find a better way to cleanup InFlightPackets,
-	// or curry into Next metadata so that the entire refund path can be re-created.
-
-	// For successful ack, we no longer need to track this packet.
-	// am.keeper.RemoveInFlightPacket(ctx, packet)
-
-	return nil
+	// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
+	return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet.Sequence, packet.SourcePort, packet.SourceChannel, ack)
 }
 
 // OnTimeoutPacket implements the IBCModule interface
@@ -473,47 +371,8 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	}
 
 	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
-		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
-		if inFlightPacket == nil {
-			return nil
-		}
-
-		amount, ok := sdk.NewIntFromString(data.Amount)
-		if !ok {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for refund on timeout",
-				"sequence", packet.Sequence,
-				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-				"amount", data.Amount,
-			)
-			return nil
-		}
-
-		denom := data.Denom
-		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
-		if denomTrace.Path != "" {
-			denom = denomTrace.IBCDenom()
-		}
-
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnTimeoutPacket",
-			"sequence", packet.Sequence,
-			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
-			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom", denom,
-		)
-
-		am.keeper.RefundForwardedPacket(
-			ctx,
-			inFlightPacket.RefundChannelId,
-			inFlightPacket.RefundPortId,
-			inFlightPacket.RefundSequence,
-			data.Sender,
-			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(denom, amount),
-			am.refundTimeout,
-		)
-		return nil
+		// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
+		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet.Sequence, packet.SourcePort, packet.SourceChannel, channeltypes.NewErrorAcknowledgement(err.Error()))
 	}
 
 	return nil
