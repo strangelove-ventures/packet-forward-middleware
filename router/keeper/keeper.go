@@ -108,7 +108,6 @@ func (k Keeper) ForwardTransferPacket(
 	receiver string,
 	metadata *ForwardMetadata,
 	token sdk.Coin,
-	refundDenom string,
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
@@ -180,7 +179,7 @@ func (k Keeper) ForwardTransferPacket(
 			RefundChannelId:       srcPacket.DestinationChannel,
 			RefundPortId:          srcPacket.DestinationPort,
 			RefundSequence:        srcPacket.Sequence,
-			RefundDenom:           refundDenom,
+			RefundDenom:           token.Denom,
 			RetriesRemaining:      int32(maxRetries),
 			Timeout:               uint64(timeout.Nanoseconds()),
 		}
@@ -257,6 +256,10 @@ func (k Keeper) HandleTimeout(
 		Port:     packet.SourcePort,
 	}
 
+	if data.Memo != "" {
+		metadata.Next = &data.Memo
+	}
+
 	amount, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
 		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for router retry",
@@ -274,7 +277,7 @@ func (k Keeper) HandleTimeout(
 
 	var token = sdk.NewCoin(denom, amount)
 
-	// srcPacket, srcPacketSender, and refundDenom are empty because inFlightPacket is non-nil.
+	// srcPacket and srcPacketSender are empty because inFlightPacket is non-nil.
 	return k.ForwardTransferPacket(
 		ctx,
 		&inFlightPacket,
@@ -283,7 +286,6 @@ func (k Keeper) HandleTimeout(
 		data.Sender,
 		metadata,
 		token,
-		"",
 		uint8(inFlightPacket.RetriesRemaining),
 		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
 		nil,

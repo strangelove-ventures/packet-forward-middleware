@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -224,44 +225,22 @@ func (am AppModule) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string
 	return am.app.OnChanCloseConfirm(ctx, portID, channelID)
 }
 
-// NextHopCoin assembles a token with the correct denom for the next hop.
-func (am AppModule) NextHopCoin(ctx sdk.Context, srcPort, srcChannel, dstPort, dstChannel, denom, amount string) (sdk.Coin, error) {
-	// recalculate denom, skip checks that were already done in app.OnRecvPacket
-	var denomOut string
-
-	if transfertypes.ReceiverChainIsSource(srcPort, srcChannel, denom) {
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware NextHopCoin receiver chain is source",
-			"src_port", srcPort, "src_channel", srcChannel,
-			"dst_port", dstPort, "dst_channel", dstChannel,
-			"denom", denom, "amount", amount,
-		)
-		// remove prefix added by sender chain
-		voucherPrefix := transfertypes.GetDenomPrefix(srcPort, srcChannel)
-		unprefixedDenom := denom[len(voucherPrefix):]
-
-		// coin denomination used in sending from the escrow address
-		denomOut = unprefixedDenom
-
-		// The denomination used to send the coins is either the native denom or the hash of the path
-		// if the denomination is not native.
-		denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
-		if denomTrace.Path != "" {
-			denomOut = denomTrace.IBCDenom()
+func GetDenomForThisChain(port, channel, counterpartyPort, counterpartyChannel, denom string) string {
+	counterpartyPrefix := transfertypes.GetDenomPrefix(counterpartyPort, counterpartyChannel)
+	if strings.HasPrefix(denom, counterpartyPrefix) {
+		// unwind denom
+		unwoundDenom := denom[len(counterpartyPrefix):]
+		denomTrace := transfertypes.ParseDenomTrace(unwoundDenom)
+		if denomTrace.Path == "" {
+			// denom is now unwound back to native denom
+			return unwoundDenom
 		}
-	} else {
-		am.keeper.Logger(ctx).Debug("packetForwardMiddleware NextHopCoin sender chain is source",
-			"src_port", srcPort, "src_channel", srcChannel,
-			"dst_port", dstPort, "dst_channel", dstChannel,
-			"denom", denom, "amount", amount,
-		)
-		prefixedDenom := transfertypes.GetDenomPrefix(dstPort, dstChannel) + denom
-		denomOut = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
+		// denom is still IBC denom
+		return denomTrace.IBCDenom()
 	}
-	unit, err := sdk.ParseUint(amount)
-	if err != nil {
-		return sdk.Coin{}, err
-	}
-	return sdk.NewCoin(denomOut, sdk.NewIntFromUint64(unit.Uint64())), nil
+	// append port and channel from this chain to denom
+	prefixedDenom := transfertypes.GetDenomPrefix(port, channel) + denom
+	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 }
 
 // OnRecvPacket implements the IBCModule interface.
@@ -314,31 +293,39 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		// TODO can we unwrap denom instead of requiring RefundDenom to be stored on InFlightPacket?
 		// token := sdk.NewCoin(inFlightPacket.RefundDenom, amount)
 
-		token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
-		if err != nil {
-			am.keeper.Logger(ctx).Error("packetForwardMiddleware error getting next hop coin",
+		denomOnThisChain := GetDenomForThisChain(
+			packet.DestinationPort, packet.DestinationChannel,
+			packet.SourcePort, packet.SourceChannel,
+			data.Denom,
+		)
+
+		amountInt, ok := sdk.NewIntFromString(data.Amount)
+		if !ok {
+			am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing amount for refund",
 				"sequence", packet.Sequence,
 				"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 				"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 				"amount", data.Amount, "denom", data.Denom,
 				"error", err,
 			)
-			return nil
 		}
-
-		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
-		ibcDenom := denomTrace.IBCDenom()
 
 		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnRecvPacket",
 			"sequence", packet.Sequence,
 			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom, "refund_denom", inFlightPacket.RefundDenom,
+			"raw_denom", data.Denom, "denom_on_this_chain", denomOnThisChain,
 		)
 
 		// pass along refund to previous hop in multi-hop.
-		am.keeper.RefundForwardedPacket(ctx, inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence, data.Receiver, inFlightPacket.OriginalSenderAddress, token, am.refundTimeout)
+		am.keeper.RefundForwardedPacket(
+			ctx,
+			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId, inFlightPacket.RefundSequence,
+			data.Receiver, inFlightPacket.OriginalSenderAddress,
+			sdk.NewCoin(denomOnThisChain, amountInt),
+			am.refundTimeout,
+		)
 		return nil
 	}
 
@@ -351,10 +338,18 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		return ack
 	}
 
-	token, err := am.NextHopCoin(ctx, packet.SourcePort, packet.SourceChannel, packet.DestinationPort, packet.DestinationChannel, data.Denom, data.Amount)
-	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(err.Error())
+	denomOnThisChain := GetDenomForThisChain(
+		packet.DestinationPort, packet.DestinationChannel,
+		packet.SourcePort, packet.SourceChannel,
+		data.Denom,
+	)
+
+	amountInt, ok := sdk.NewIntFromString(data.Amount)
+	if !ok {
+		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("error parsing amount for forward: %s", data.Amount))
 	}
+
+	token := sdk.NewCoin(denomOnThisChain, amountInt)
 
 	var timeout time.Duration
 	if metadata.Timeout.Nanoseconds() > 0 {
@@ -370,7 +365,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		retries = am.retriesOnTimeout
 	}
 
-	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, data.Denom, retries, timeout, []metrics.Label{})
+	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 	if err != nil {
 		// Don't think this is needed since ack error will issue refund on previous chain.
 		// am.keeper.RefundForwardedPacket(ctx, packet.DestinationChannel, packet.DestinationPort, packet.Sequence, data.Receiver, data.Sender, token, am.refundTimeout)
@@ -439,15 +434,18 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			return nil
 		}
 
-		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
-		ibcDenom := denomTrace.IBCDenom()
+		denomOnThisChain := GetDenomForThisChain(
+			packet.SourcePort, packet.SourceChannel,
+			packet.DestinationPort, packet.DestinationChannel,
+			data.Denom,
+		)
 
 		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnAcknowledgementPacket",
 			"sequence", packet.Sequence,
 			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom,
+			"raw_denom", data.Denom, "denom_on_this_chain", denomOnThisChain,
 			"refund_denom", inFlightPacket.RefundDenom,
 		)
 
@@ -458,7 +456,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(data.Denom, amount),
+			sdk.NewCoin(denomOnThisChain, amount),
 			am.refundTimeout,
 		)
 		return nil
@@ -523,15 +521,18 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			return nil
 		}
 
-		denomTrace := transfertypes.ParseDenomTrace(data.Denom)
-		ibcDenom := denomTrace.IBCDenom()
+		denomOnThisChain := GetDenomForThisChain(
+			packet.SourcePort, packet.SourceChannel,
+			packet.DestinationPort, packet.DestinationChannel,
+			data.Denom,
+		)
 
 		am.keeper.Logger(ctx).Debug("packetForwardMiddleware RefundForwardedPacket from OnTimeoutPacket",
 			"sequence", packet.Sequence,
 			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
 			"amount", data.Amount,
-			"raw_denom", data.Denom, "denom_trace", denomTrace, "ibc_denom", ibcDenom,
+			"raw_denom", data.Denom, "denom_on_this_chain", denomOnThisChain,
 			"refund_denom", inFlightPacket.RefundDenom,
 		)
 
@@ -542,7 +543,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			inFlightPacket.RefundSequence,
 			data.Sender,
 			inFlightPacket.OriginalSenderAddress,
-			sdk.NewCoin(data.Denom, amount),
+			sdk.NewCoin(denomOnThisChain, amount),
 			am.refundTimeout,
 		)
 		return nil
