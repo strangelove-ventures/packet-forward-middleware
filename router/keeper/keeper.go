@@ -100,16 +100,9 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	ctx sdk.Context,
-	sequence uint64,
-	port, channel string,
+	inFlightPacket *types.InFlightPacket,
 	ack channeltypes.Acknowledgement,
 ) error {
-	inFlightPacket := k.GetAndClearInFlightPacket(ctx, channel, port, sequence)
-	if inFlightPacket == nil {
-		// not a forwarded packet
-		return nil
-	}
-
 	// Lookup module by channel capability
 	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {

@@ -333,17 +333,18 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 		"amount", data.Amount, "denom", data.Denom,
 	)
 
-	if err := am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer); err != nil {
-		return err
-	}
-
 	var ack channeltypes.Acknowledgement
 	if err := channeltypes.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
 		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
-	// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
-	return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet.Sequence, packet.SourcePort, packet.SourceChannel, ack)
+	inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
+	if inFlightPacket != nil {
+		// this is a forwarded packet, so override handling to avoid refund from being processed.
+		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, inFlightPacket, ack)
+	}
+
+	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 }
 
 // OnTimeoutPacket implements the IBCModule interface
@@ -366,14 +367,14 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 		"amount", data.Amount, "denom", data.Denom,
 	)
 
-	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
-		return err
-	}
-
 	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
 		// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
-		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet.Sequence, packet.SourcePort, packet.SourceChannel, channeltypes.NewErrorAcknowledgement(err.Error()))
+		inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
+		if inFlightPacket != nil {
+			// this is a forwarded packet, so override handling to avoid refund from being processed.
+			return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, inFlightPacket, channeltypes.NewErrorAcknowledgement(err.Error()))
+		}
 	}
 
-	return nil
+	return am.app.OnTimeoutPacket(ctx, packet, relayer)
 }
