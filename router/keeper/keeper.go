@@ -235,16 +235,17 @@ func (k Keeper) ForwardTransferPacket(
 	return nil
 }
 
-func (k Keeper) HandleTimeout(
+// TimeoutShouldRetry returns inFlightPacket and no error if retry should be attempted. Error is returned if IBC refund should occur.
+func (k Keeper) TimeoutShouldRetry(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
-) error {
+) (*types.InFlightPacket, error) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 
 	if !store.Has(key) {
 		// not a forwarded packet, ignore.
-		return nil
+		return nil, nil
 	}
 
 	bz := store.Get(key)
@@ -258,29 +259,24 @@ func (k Keeper) HandleTimeout(
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
 		)
-		return fmt.Errorf("giving up on packet on channel (%s) port (%s) after max retries",
+		return &inFlightPacket, fmt.Errorf("giving up on packet on channel (%s) port (%s) after max retries",
 			inFlightPacket.RefundChannelId, inFlightPacket.RefundPortId)
 	}
 
-	// Parse packet data
-	var data transfertypes.FungibleTokenPacketData
-	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		k.Logger(ctx).Error("packetForwardMiddleware error unmarshalling packet data",
-			"key", string(key),
-			"original-sender-address", inFlightPacket.OriginalSenderAddress,
-			"refund-channel-id", inFlightPacket.RefundChannelId,
-			"refund-port-id", inFlightPacket.RefundPortId,
-			"retries-remaining", inFlightPacket.RetriesRemaining,
-			"error", err,
-		)
-		return fmt.Errorf("error unmarshalling packet data: %w", err)
-	}
+	return &inFlightPacket, nil
+}
 
+func (k Keeper) RetryTimeout(
+	ctx sdk.Context,
+	channel, port string,
+	data transfertypes.FungibleTokenPacketData,
+	inFlightPacket *types.InFlightPacket,
+) error {
 	// send transfer again
 	metadata := &ForwardMetadata{
 		Receiver: data.Receiver,
-		Channel:  packet.SourceChannel,
-		Port:     packet.SourcePort,
+		Channel:  channel,
+		Port:     port,
 	}
 
 	if data.Memo != "" {
@@ -289,8 +285,7 @@ func (k Keeper) HandleTimeout(
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
-		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for router retry",
-			"key", string(key),
+		k.Logger(ctx).Error("packetForwardMiddleware error parsing amount from string for router retry on timeout",
 			"original-sender-address", inFlightPacket.OriginalSenderAddress,
 			"refund-channel-id", inFlightPacket.RefundChannelId,
 			"refund-port-id", inFlightPacket.RefundPortId,
@@ -307,7 +302,7 @@ func (k Keeper) HandleTimeout(
 	// srcPacket and srcPacketSender are empty because inFlightPacket is non-nil.
 	return k.ForwardTransferPacket(
 		ctx,
-		&inFlightPacket,
+		inFlightPacket,
 		channeltypes.Packet{},
 		"",
 		data.Sender,
