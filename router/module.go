@@ -341,7 +341,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 	inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if inFlightPacket != nil {
 		// this is a forwarded packet, so override handling to avoid refund from being processed.
-		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, inFlightPacket, ack)
+		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, ack)
 	}
 
 	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
@@ -373,7 +373,7 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 			am.keeper.RemoveInFlightPacket(ctx, packet)
 			// this is a forwarded packet, so override handling to avoid refund from being processed on this chain.
 			// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
-			return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, inFlightPacket, channeltypes.NewErrorAcknowledgement(err.Error()))
+			return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, channeltypes.NewErrorAcknowledgement(err.Error()))
 		}
 		// timeout should be retried. In order to do that, we need to handle this timeout to refund on this chain first.
 		if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {

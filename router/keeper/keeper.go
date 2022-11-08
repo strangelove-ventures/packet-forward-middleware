@@ -2,6 +2,7 @@ package keeper
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/armon/go-metrics"
@@ -30,6 +31,7 @@ type Keeper struct {
 	transferKeeper types.TransferKeeper
 	channelKeeper  types.ChannelKeeper
 	distrKeeper    types.DistributionKeeper
+	bankKeeper     types.BankKeeper
 }
 
 type PacketMetadata struct {
@@ -75,7 +77,8 @@ var (
 // NewKeeper creates a new 29-fee Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec, key storetypes.StoreKey, paramSpace paramtypes.Subspace,
-	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper, distrKeeper types.DistributionKeeper,
+	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper,
+	distrKeeper types.DistributionKeeper, bankKeeper types.BankKeeper,
 ) Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
@@ -90,6 +93,7 @@ func NewKeeper(
 		transferKeeper: transferKeeper,
 		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
+		bankKeeper:     bankKeeper,
 	}
 }
 
@@ -100,6 +104,8 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 
 func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	ctx sdk.Context,
+	packet channeltypes.Packet,
+	data transfertypes.FungibleTokenPacketData,
 	inFlightPacket *types.InFlightPacket,
 	ack channeltypes.Acknowledgement,
 ) error {
@@ -107,6 +113,66 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
 		return sdkerrors.Wrap(err, "could not retrieve module from port-id")
+	}
+
+	// for forwarded packets, the funds were moved into an escrow account if the denom originated on this chain.
+	// On an ack error or timeout on a forwarded packet, the funds in the escrow account
+	// should be moved to the other escrow account on the other side or burned.
+	if !ack.Success() {
+		fullDenomPath := data.Denom
+
+		// deconstruct the token denomination into the denomination trace info
+		// to determine if the sender is the source chain
+		if strings.HasPrefix(data.Denom, "ibc/") {
+			fullDenomPath, err = k.transferKeeper.DenomPathFromHash(ctx, data.Denom)
+			if err != nil {
+				return err
+			}
+		}
+
+		if transfertypes.SenderChainIsSource(packet.SourcePort, packet.SourceChannel, fullDenomPath) {
+			// funds were moved to escrow account for transfer, so they need to either:
+			// - move to the other escrow account, in the case of native denom
+			// - burn
+
+			amount, ok := sdk.NewIntFromString(data.Amount)
+			if !ok {
+				return fmt.Errorf("failed to parse amount from packet data for forward refund: %s", data.Amount)
+			}
+			denomTrace := transfertypes.ParseDenomTrace(fullDenomPath)
+			token := sdk.NewCoin(denomTrace.IBCDenom(), amount)
+
+			escrowAddress := transfertypes.GetEscrowAddress(packet.SourcePort, packet.SourceChannel)
+
+			if transfertypes.SenderChainIsSource(inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId, fullDenomPath) {
+				// transfer funds from escrow account for forwarded packet to escrow account going back for refund.
+
+				refundEscrowAddress := transfertypes.GetEscrowAddress(inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
+
+				if err := k.bankKeeper.SendCoins(
+					ctx, escrowAddress, refundEscrowAddress, sdk.NewCoins(token),
+				); err != nil {
+					return fmt.Errorf("failed to send coins from escrow account to refund escrow account: %w", err)
+				}
+			} else {
+				// transfer the coins from the escrow account to the module account and burn them.
+
+				if err := k.bankKeeper.SendCoinsFromAccountToModule(
+					ctx, escrowAddress, transfertypes.ModuleName, sdk.NewCoins(token),
+				); err != nil {
+					return fmt.Errorf("failed to send coins from escrow to module account for burn: %w", err)
+				}
+
+				if err := k.bankKeeper.BurnCoins(
+					ctx, transfertypes.ModuleName, sdk.NewCoins(token),
+				); err != nil {
+					// NOTE: should not happen as the module account was
+					// retrieved on the step above and it has enough balace
+					// to burn.
+					panic(fmt.Sprintf("cannot burn coins after a successful send from escrow account to module account: %v", err))
+				}
+			}
+		}
 	}
 
 	return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
