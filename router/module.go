@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"strings"
 	"time"
 
-	"cosmossdk.io/math"
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -26,7 +26,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/client/cli"
 	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/parser"
 	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
@@ -226,6 +225,24 @@ func (am AppModule) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string
 	return am.app.OnChanCloseConfirm(ctx, portID, channelID)
 }
 
+func GetDenomForThisChain(port, channel, counterpartyPort, counterpartyChannel, denom string) string {
+	counterpartyPrefix := transfertypes.GetDenomPrefix(counterpartyPort, counterpartyChannel)
+	if strings.HasPrefix(denom, counterpartyPrefix) {
+		// unwind denom
+		unwoundDenom := denom[len(counterpartyPrefix):]
+		denomTrace := transfertypes.ParseDenomTrace(unwoundDenom)
+		if denomTrace.Path == "" {
+			// denom is now unwound back to native denom
+			return unwoundDenom
+		}
+		// denom is still IBC denom
+		return denomTrace.IBCDenom()
+	}
+	// append port and channel from this chain to denom
+	prefixedDenom := transfertypes.GetDenomPrefix(port, channel) + denom
+	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
+}
+
 // OnRecvPacket implements the IBCModule interface.
 func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) ibcexported.Acknowledgement {
 	var data transfertypes.FungibleTokenPacketData
@@ -233,110 +250,137 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 		return channeltypes.NewErrorAcknowledgement(err)
 	}
 
-	// parse out any forwarding info
-	parsedReceiver, err := parser.ParseReceiverData(data.Receiver)
-	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(err)
-	}
+	am.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket",
+		"sequence", packet.Sequence,
+		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+		"amount", data.Amount, "denom", data.Denom,
+	)
 
-	if !parsedReceiver.ShouldForward {
+	m := &keeper.PacketMetadata{}
+	err := json.Unmarshal([]byte(data.Memo), m)
+	if err != nil || m.Forward == nil {
+		// not a packet that should be forwarded
+		am.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return am.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
-	// Modify packet data to process packet transfer for this chain, omitting forwarding info
-	newData := data
-	newData.Receiver = parsedReceiver.HostAccAddr
-	bz, err := transfertypes.ModuleCdc.MarshalJSON(&newData)
+	metadata := m.Forward
+
+	if err := metadata.Validate(); err != nil {
+		return channeltypes.NewErrorAcknowledgement(err)
+	}
+
+	ack := am.app.OnRecvPacket(ctx, packet, relayer)
+	if ack == nil || !ack.Success() {
+		return ack
+	}
+
+	denomOnThisChain := GetDenomForThisChain(
+		packet.DestinationPort, packet.DestinationChannel,
+		packet.SourcePort, packet.SourceChannel,
+		data.Denom,
+	)
+
+	amountInt, ok := sdk.NewIntFromString(data.Amount)
+	if !ok {
+		return channeltypes.NewErrorAcknowledgement(fmt.Errorf("error parsing amount for forward: %s", data.Amount))
+	}
+
+	token := sdk.NewCoin(denomOnThisChain, amountInt)
+
+	var timeout time.Duration
+	if metadata.Timeout.Nanoseconds() > 0 {
+		timeout = metadata.Timeout
+	} else {
+		timeout = am.forwardTimeout
+	}
+
+	var retries uint8
+	if metadata.Retries != nil {
+		retries = *metadata.Retries
+	} else {
+		retries = am.retriesOnTimeout
+	}
+
+	err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 	if err != nil {
 		return channeltypes.NewErrorAcknowledgement(err)
 	}
-	newPacket := packet
-	newPacket.Data = bz
 
-	ack := am.app.OnRecvPacket(ctx, newPacket, relayer)
-	if ack.Success() {
-		// recalculate denom, skip checks that were already done in app.OnRecvPacket
-		var err error
-		// TODO put denom handling in separate function
-		var denom string
-		if transfertypes.ReceiverChainIsSource(packet.GetSourcePort(), packet.GetSourceChannel(), newData.Denom) {
-			// remove prefix added by sender chain
-			voucherPrefix := transfertypes.GetDenomPrefix(packet.GetSourcePort(), packet.GetSourceChannel())
-			unprefixedDenom := newData.Denom[len(voucherPrefix):]
-
-			// coin denomination used in sending from the escrow address
-			denom = unprefixedDenom
-
-			// The denomination used to send the coins is either the native denom or the hash of the path
-			// if the denomination is not native.
-			denomTrace := transfertypes.ParseDenomTrace(unprefixedDenom)
-			if denomTrace.Path != "" {
-				denom = denomTrace.IBCDenom()
-			}
-		} else {
-			prefixedDenom := transfertypes.GetDenomPrefix(packet.GetDestPort(), packet.GetDestChannel()) + newData.Denom
-			denom = transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
-		}
-		unit, err := math.ParseUint(newData.Amount)
-		if err != nil {
-			channeltypes.NewErrorAcknowledgement(err)
-		}
-		var token = sdk.NewCoin(denom, sdk.NewIntFromUint64(unit.Uint64()))
-
-		var timeout time.Duration
-		if parsedReceiver.Timeout.Nanoseconds() > 0 {
-			timeout = parsedReceiver.Timeout
-		} else {
-			timeout = am.forwardTimeout
-		}
-
-		var retries uint8
-		if parsedReceiver.ForwardRetries != nil {
-			retries = *parsedReceiver.ForwardRetries
-		} else {
-			retries = am.retriesOnTimeout
-		}
-
-		err = am.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, parsedReceiver, token, retries, timeout, []metrics.Label{})
-		if err != nil {
-			am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
-			ack = channeltypes.NewErrorAcknowledgement(err)
-		}
-	}
-	return ack
+	// returning nil ack will prevent WriteAcknowledgement from occurring for forwarded packet.
+	// This is intentional so that the acknowledgement will be written later based on the ack/timeout of the forwarded packet.
+	return nil
 }
 
 // OnAcknowledgementPacket implements the IBCModule interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
-	if err := am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer); err != nil {
-		return err
+	var data transfertypes.FungibleTokenPacketData
+	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+		am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from ack packet",
+			"sequence", packet.Sequence,
+			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+			"error", err,
+		)
+		return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 	}
+
+	am.keeper.Logger(ctx).Debug("packetForwardMiddleware OnAcknowledgementPacket",
+		"sequence", packet.Sequence,
+		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+		"amount", data.Amount, "denom", data.Denom,
+	)
 
 	var ack channeltypes.Acknowledgement
-	if err := json.Unmarshal(acknowledgement, &ack); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrJSONUnmarshal, err.Error())
+	if err := channeltypes.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
+		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
-	if !ack.Success() {
-		// If acknowledgement indicates error, no retries should be attempted. Refund will be initiated now.
-		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
-		return nil
+	inFlightPacket := am.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
+	if inFlightPacket != nil {
+		// this is a forwarded packet, so override handling to avoid refund from being processed.
+		return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, ack)
 	}
 
-	// For successful ack, we no longer need to track this packet.
-	am.keeper.RemoveInFlightPacket(ctx, packet)
-	return nil
+	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 }
 
 // OnTimeoutPacket implements the IBCModule interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
-	if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
-		return err
+	var data transfertypes.FungibleTokenPacketData
+	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
+		am.keeper.Logger(ctx).Error("packetForwardMiddleware error parsing packet data from timeout packet",
+			"sequence", packet.Sequence,
+			"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+			"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+			"error", err,
+		)
+		return am.app.OnTimeoutPacket(ctx, packet, relayer)
 	}
 
-	if err := am.keeper.HandleTimeout(ctx, packet); err != nil {
-		am.keeper.RefundForwardedPacket(ctx, packet, am.refundTimeout)
+	am.keeper.Logger(ctx).Debug("packetForwardMiddleware OnAcknowledgementPacket",
+		"sequence", packet.Sequence,
+		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
+		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
+		"amount", data.Amount, "denom", data.Denom,
+	)
+
+	inFlightPacket, err := am.keeper.TimeoutShouldRetry(ctx, packet)
+	if inFlightPacket != nil {
+		if err != nil {
+			am.keeper.RemoveInFlightPacket(ctx, packet)
+			// this is a forwarded packet, so override handling to avoid refund from being processed on this chain.
+			// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
+			return am.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, channeltypes.NewErrorAcknowledgement(err))
+		}
+		// timeout should be retried. In order to do that, we need to handle this timeout to refund on this chain first.
+		if err := am.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
+			return err
+		}
+		return am.keeper.RetryTimeout(ctx, packet.SourceChannel, packet.SourcePort, data, inFlightPacket)
 	}
 
-	return nil
+	return am.app.OnTimeoutPacket(ctx, packet, relayer)
 }

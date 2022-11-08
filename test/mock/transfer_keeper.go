@@ -8,7 +8,8 @@ import (
 	context "context"
 	reflect "reflect"
 
-	types "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	types "github.com/cosmos/cosmos-sdk/types"
+	types0 "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -35,11 +36,26 @@ func (m *MockTransferKeeper) EXPECT() *MockTransferKeeperMockRecorder {
 	return m.recorder
 }
 
+// DenomPathFromHash mocks base method.
+func (m *MockTransferKeeper) DenomPathFromHash(arg0 types.Context, arg1 string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DenomPathFromHash", arg0, arg1)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DenomPathFromHash indicates an expected call of DenomPathFromHash.
+func (mr *MockTransferKeeperMockRecorder) DenomPathFromHash(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DenomPathFromHash", reflect.TypeOf((*MockTransferKeeper)(nil).DenomPathFromHash), arg0, arg1)
+}
+
 // Transfer mocks base method.
-func (m *MockTransferKeeper) Transfer(arg0 context.Context, arg1 *types.MsgTransfer) (*types.MsgTransferResponse, error) {
+func (m *MockTransferKeeper) Transfer(arg0 context.Context, arg1 *types0.MsgTransfer) (*types0.MsgTransferResponse, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Transfer", arg0, arg1)
-	ret0, _ := ret[0].(*types.MsgTransferResponse)
+	ret0, _ := ret[0].(*types0.MsgTransferResponse)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
