@@ -1,6 +1,7 @@
 package router_test
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -34,12 +35,19 @@ func emptyPacket() channeltypes.Packet {
 	return channeltypes.Packet{}
 }
 
-func transferPacket(t *testing.T, receiver string) channeltypes.Packet {
+func transferPacket(t *testing.T, receiver string, metadata *keeper.PacketMetadata) channeltypes.Packet {
 	transferPacket := transfertypes.FungibleTokenPacketData{
 		Denom:    testDenom,
 		Amount:   testAmount,
 		Receiver: receiver,
 	}
+
+	if metadata != nil {
+		memo, err := json.Marshal(metadata)
+		require.NoError(t, err)
+		transferPacket.Memo = string(memo)
+	}
+
 	transferData, err := transfertypes.ModuleCdc.MarshalJSON(&transferPacket)
 	require.NoError(t, err)
 
@@ -83,15 +91,20 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 
 	// Test data
 	senderAccAddr := test.AccAddress()
-	packet := transferPacket(t, "")
+	packet := transferPacket(t, "", nil)
+
+	// Expected mocks
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
+			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+	)
 
 	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
-	require.False(t, ack.Success())
+	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
 	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
 	require.NoError(t, err)
-	require.Equal(t, "ABCI code: 1: error handling packet: see events for details", expectedAck.GetError())
 }
 
 func TestOnRecvPacket_NoForward(t *testing.T) {
@@ -104,7 +117,7 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 
 	// Test data
 	senderAccAddr := test.AccAddress()
-	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k", nil)
 
 	// Expected mocks
 	gomock.InOrder(
@@ -130,7 +143,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	routerModule := setup.RouterModule
 
 	senderAccAddr := test.AccAddress()
-	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k")
+	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k", nil)
 
 	// Expected mocks
 	gomock.InOrder(
@@ -165,13 +178,22 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
 	senderAccAddr := test.AccAddress()
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
-	packetOrig := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
-	packetFw := transferPacket(t, hostAddr)
+	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
+		Forward: &keeper.ForwardMetadata{
+			Receiver: destAddr,
+			Port:     port,
+			Channel:  channel,
+		},
+	})
+	packetFwd := transferPacket(t, destAddr, nil)
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte("test"))
+	successAck := cdc.MustMarshalJSON(&acknowledgement)
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
-			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+			Return(acknowledgement),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
@@ -184,18 +206,19 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
 			),
-		).Return(&apptypes.MsgTransferResponse{}, nil),
+		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.ChannelKeeperMock.EXPECT().GetNextSequenceSend(ctx, port, channel).Return(uint64(0), true),
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
+			Return(nil),
 	)
 
+	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
-	require.True(t, ack.Success())
+	require.Nil(t, ack)
 
-	expectedAck := &channeltypes.Acknowledgement{}
-	err = cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	// ack returned from chain C
+	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
 	require.NoError(t, err)
-	require.Equal(t, "test", string(expectedAck.GetResult()))
 }
 
 func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
@@ -220,13 +243,21 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 	hostAccAddr := test.AccAddressFromBech32(t, hostAddr)
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(90))
 	feeCoins := sdk.Coins{sdk.NewCoin(denom, sdk.NewInt(10))}
-	packetOrig := transferPacket(t, test.MakeForwardReceiver(hostAddr, port, channel, destAddr))
-	packetFw := transferPacket(t, hostAddr)
+	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
+		Forward: &keeper.ForwardMetadata{
+			Receiver: destAddr,
+			Port:     port,
+			Channel:  channel,
+		},
+	})
+	packetFwd := transferPacket(t, destAddr, nil)
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte("test"))
+	successAck := cdc.MustMarshalJSON(&acknowledgement)
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetFw, senderAccAddr).
-			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+			Return(acknowledgement),
 
 		setup.Mocks.DistributionKeeperMock.EXPECT().FundCommunityPool(
 			ctx,
@@ -245,16 +276,129 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
 			),
-		).Return(&apptypes.MsgTransferResponse{}, nil),
+		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.ChannelKeeperMock.EXPECT().GetNextSequenceSend(ctx, port, channel).Return(uint64(0), true),
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
+			Return(nil),
 	)
 
+	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
 	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
-	require.True(t, ack.Success())
+	require.Nil(t, ack)
 
-	expectedAck := &channeltypes.Acknowledgement{}
-	err = cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	// ack returned from chain C
+	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
 	require.NoError(t, err)
-	require.Equal(t, "test", string(expectedAck.GetResult()))
+}
+
+func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
+	var err error
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	setup := test.NewTestSetup(t, ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	routerModule := setup.RouterModule
+
+	// Test data
+	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
+	hostAddr2 := "cosmos1q4p4gx889lfek5augdurrjclwtqvjhuntm6j4m"
+	destAddr := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
+	port := "transfer"
+	channel := "channel-0"
+	channel2 := "channel-1"
+	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
+	senderAccAddr := test.AccAddress()
+	senderAccAddr2 := test.AccAddress()
+	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
+	nextMetadata := &keeper.PacketMetadata{
+		Forward: &keeper.ForwardMetadata{
+			Receiver: destAddr,
+			Port:     port,
+			Channel:  channel2,
+		},
+	}
+	nextBz, err := json.Marshal(nextMetadata)
+	require.NoError(t, err)
+
+	next := string(nextBz)
+
+	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
+		Forward: &keeper.ForwardMetadata{
+			Receiver: hostAddr2,
+			Port:     port,
+			Channel:  channel,
+			Next:     &next,
+		},
+	})
+	packet2 := transferPacket(t, hostAddr2, nextMetadata)
+	packetFwd := transferPacket(t, destAddr, nil)
+
+	msgTransfer1 := transfertypes.NewMsgTransfer(
+		port,
+		channel,
+		testCoin,
+		hostAddr,
+		hostAddr2,
+		keeper.DefaultTransferPacketTimeoutHeight,
+		uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+	)
+	memo1, err := json.Marshal(nextMetadata)
+	require.NoError(t, err)
+	msgTransfer1.Memo = string(memo1)
+
+	msgTransfer2 := transfertypes.NewMsgTransfer(
+		port,
+		channel2,
+		testCoin,
+		hostAddr2,
+		destAddr,
+		keeper.DefaultTransferPacketTimeoutHeight,
+		uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+	)
+	// no memo on final forward
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte("test"))
+	successAck := cdc.MustMarshalJSON(&acknowledgement)
+
+	// Expected mocks
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+			Return(acknowledgement),
+
+		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
+			sdk.WrapSDKContext(ctx),
+			msgTransfer1,
+		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
+			Return(acknowledgement),
+
+		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
+			sdk.WrapSDKContext(ctx),
+			msgTransfer2,
+		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
+			Return(nil),
+
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr).
+			Return(nil),
+	)
+
+	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
+	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	require.Nil(t, ack)
+
+	// chain C with router module receives packet and forwards. ack should be nil so that it is not written yet.
+	ack = routerModule.OnRecvPacket(ctx, packet2, senderAccAddr2)
+	require.Nil(t, ack)
+
+	// ack returned from chain D to chain C
+	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2)
+	require.NoError(t, err)
+
+	// ack returned from chain C to chain B
+	err = routerModule.OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr)
+	require.NoError(t, err)
 }

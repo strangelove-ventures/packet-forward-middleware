@@ -28,10 +28,11 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
 	channelKeeperMock := mock.NewMockChannelKeeper(ctl)
 	distributionKeeperMock := mock.NewMockDistributionKeeper(ctl)
+	bankKeeperMock := mock.NewMockBankKeeper(ctl)
 	ibcModuleMock := mock.NewMockIBCModule(ctl)
 
 	paramsKeeper := initializer.paramsKeeper()
-	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock)
+	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock)
 	routerModule := initializer.routerModule(routerKeeper, ibcModuleMock)
 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
@@ -124,12 +125,13 @@ func (i initializer) routerKeeper(
 	transferKeeper types.TransferKeeper,
 	channelKeeper types.ChannelKeeper,
 	distributionKeeper types.DistributionKeeper,
+	bankKeeper types.BankKeeper,
 ) keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
 	i.StateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, i.DB)
 
 	subspace := paramsKeeper.Subspace(types.ModuleName)
-	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, channelKeeper, distributionKeeper)
+	routerKeeper := keeper.NewKeeper(i.Marshaler, storeKey, subspace, transferKeeper, channelKeeper, distributionKeeper, bankKeeper)
 
 	return routerKeeper
 }
