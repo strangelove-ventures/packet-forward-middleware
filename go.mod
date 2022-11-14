@@ -5,7 +5,7 @@ module github.com/strangelove-ventures/packet-forward-middleware/v5
 require (
 	github.com/armon/go-metrics v0.4.0
 	github.com/cosmos/cosmos-sdk v0.46.4
-	github.com/cosmos/ibc-go/v5 v5.0.0-rc2.0.20221105122714-035e17487a58
+	github.com/cosmos/ibc-go/v5 v5.1.0
 	github.com/gogo/protobuf v1.3.3
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
