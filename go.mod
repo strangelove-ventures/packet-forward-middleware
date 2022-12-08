@@ -2,7 +2,10 @@ go 1.19
 
 module github.com/strangelove-ventures/packet-forward-middleware/v3
 
-replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+replace (
+	github.com/cosmos/ibc-go/v3 => github.com/jtieri/ibc-go/v3 v3.0.0-beta1.0.20221116191630-01c53c7f66f3
+	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
+)
 
 require (
 	github.com/armon/go-metrics v0.4.0
