@@ -32,19 +32,20 @@ var (
 )
 
 var (
-	// Timeout height following IBC defaults
+	// DefaultTransferPacketTimeoutHeight is the timeout height following IBC defaults
 	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
 		RevisionNumber: 0,
 		RevisionHeight: 0,
 	}
-	// Timeout timestamp following IBC defaults
+
+	// DefaultForwardTransferPacketTimeoutTimestamp is the timeout timestamp following IBC defaults
 	DefaultForwardTransferPacketTimeoutTimestamp = time.Duration(transfertypes.DefaultRelativePacketTimeoutTimestamp) * time.Nanosecond
 
-	// 28 day timeout for refund packets since funds are stuck in router module otherwise.
+	// DefaultRefundTransferPacketTimeoutTimestamp is a 28-day timeout for refund packets since funds are stuck in router module otherwise.
 	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
 )
 
-// Keeper defines the IBC fungible transfer keeper
+// Keeper defines the packet forward middleware keeper
 type Keeper struct {
 	cdc        codec.BinaryCodec
 	storeKey   storetypes.StoreKey
