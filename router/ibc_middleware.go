@@ -20,8 +20,8 @@ import (
 
 var _ porttypes.Middleware = &IBCMiddleware{}
 
-// IBCMiddleware implements the ICS26 callbacks for the swap middleware given the
-// swap keeper and the underlying application.
+// IBCMiddleware implements the ICS26 callbacks for the forward middleware given the
+// forward keeper and the underlying application.
 type IBCMiddleware struct {
 	app    porttypes.IBCModule
 	keeper keeper.Keeper
