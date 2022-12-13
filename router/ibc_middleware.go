@@ -131,7 +131,7 @@ func (im IBCMiddleware) OnRecvPacket(
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket",
+	im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket",
 		"sequence", packet.Sequence,
 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
@@ -142,18 +142,20 @@ func (im IBCMiddleware) OnRecvPacket(
 	err := json.Unmarshal([]byte(data.Memo), m)
 	if err != nil || m.Forward == nil {
 		// not a packet that should be forwarded
-		im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return im.app.OnRecvPacket(ctx, packet, relayer)
 	}
 
 	metadata := m.Forward
 
 	if err := metadata.Validate(); err != nil {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket forward metadata INVALID")
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
 	ack := im.app.OnRecvPacket(ctx, packet, relayer)
 	if ack == nil || !ack.Success() {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket underlying app ack failed")
 		return ack
 	}
 
@@ -165,6 +167,7 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket failed to parse data.Amount to int")
 		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("error parsing amount for forward: %s", data.Amount))
 	}
 
@@ -186,9 +189,11 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	err = im.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{})
 	if err != nil {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket forward failed")
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
+	im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket before return")
 	// returning nil ack will prevent WriteAcknowledgement from occurring for forwarded packet.
 	// This is intentional so that the acknowledgement will be written later based on the ack/timeout of the forwarded packet.
 	return nil

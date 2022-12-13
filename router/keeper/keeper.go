@@ -228,7 +228,7 @@ func (k Keeper) ForwardTransferPacket(
 		msgTransfer.Memo = *metadata.Next
 	}
 
-	k.Logger(ctx).Debug("packetForwardMiddleware ForwardTransferPacket",
+	k.Logger(ctx).Error("packetForwardMiddleware ForwardTransferPacket",
 		"port", metadata.Port, "channel", metadata.Channel,
 		"sender", receiver, "receiver", metadata.Receiver,
 		"amount", packetCoin.Amount.String(), "denom", packetCoin.Denom,
