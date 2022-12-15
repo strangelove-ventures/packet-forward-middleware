@@ -35,7 +35,7 @@ func emptyPacket() channeltypes.Packet {
 	return channeltypes.Packet{}
 }
 
-func transferPacket(t *testing.T, receiver string, metadata *keeper.PacketMetadata) channeltypes.Packet {
+func transferPacket(t *testing.T, receiver string, metadata *types.PacketMetadata) channeltypes.Packet {
 	transferPacket := transfertypes.FungibleTokenPacketData{
 		Denom:    testDenom,
 		Amount:   testAmount,
@@ -66,13 +66,13 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
 	senderAccAddr := test.AccAddress()
 	packet := emptyPacket()
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -87,7 +87,7 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
 	senderAccAddr := test.AccAddress()
@@ -99,7 +99,7 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -113,7 +113,7 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
 	senderAccAddr := test.AccAddress()
@@ -125,7 +125,7 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -140,7 +140,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	senderAccAddr := test.AccAddress()
 	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k", nil)
@@ -152,7 +152,7 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 			Return(channeltypes.NewErrorAcknowledgement(errors.New("test"))),
 	)
 
-	ack := routerModule.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -168,7 +168,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
 	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
@@ -178,8 +178,8 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
 	senderAccAddr := test.AccAddress()
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
-	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
-		Forward: &keeper.ForwardMetadata{
+	packetOrig := transferPacket(t, hostAddr, &types.PacketMetadata{
+		Forward: &types.ForwardMetadata{
 			Receiver: destAddr,
 			Port:     port,
 			Channel:  channel,
@@ -213,11 +213,11 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
 	require.Nil(t, ack)
 
 	// ack returned from chain C
-	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
 	require.NoError(t, err)
 }
 
@@ -228,7 +228,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Set fee param to 10%
 	setup.Keepers.RouterKeeper.SetParams(ctx, types.NewParams(sdk.NewDecWithPrec(10, 2)))
@@ -243,8 +243,8 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 	hostAccAddr := test.AccAddressFromBech32(t, hostAddr)
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(90))
 	feeCoins := sdk.Coins{sdk.NewCoin(denom, sdk.NewInt(10))}
-	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
-		Forward: &keeper.ForwardMetadata{
+	packetOrig := transferPacket(t, hostAddr, &types.PacketMetadata{
+		Forward: &types.ForwardMetadata{
 			Receiver: destAddr,
 			Port:     port,
 			Channel:  channel,
@@ -283,11 +283,11 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
 	require.Nil(t, ack)
 
 	// ack returned from chain C
-	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
 	require.NoError(t, err)
 }
 
@@ -298,7 +298,7 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 	setup := test.NewTestSetup(t, ctl)
 	ctx := setup.Initializer.Ctx
 	cdc := setup.Initializer.Marshaler
-	routerModule := setup.RouterModule
+	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
 	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
@@ -311,8 +311,8 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 	senderAccAddr := test.AccAddress()
 	senderAccAddr2 := test.AccAddress()
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
-	nextMetadata := &keeper.PacketMetadata{
-		Forward: &keeper.ForwardMetadata{
+	nextMetadata := &types.PacketMetadata{
+		Forward: &types.ForwardMetadata{
 			Receiver: destAddr,
 			Port:     port,
 			Channel:  channel2,
@@ -323,8 +323,8 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 
 	next := string(nextBz)
 
-	packetOrig := transferPacket(t, hostAddr, &keeper.PacketMetadata{
-		Forward: &keeper.ForwardMetadata{
+	packetOrig := transferPacket(t, hostAddr, &types.PacketMetadata{
+		Forward: &types.ForwardMetadata{
 			Receiver: hostAddr2,
 			Port:     port,
 			Channel:  channel,
@@ -387,18 +387,18 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := routerModule.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
 	require.Nil(t, ack)
 
 	// chain C with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack = routerModule.OnRecvPacket(ctx, packet2, senderAccAddr2)
+	ack = forwardMiddleware.OnRecvPacket(ctx, packet2, senderAccAddr2)
 	require.Nil(t, ack)
 
 	// ack returned from chain D to chain C
-	err = routerModule.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2)
 	require.NoError(t, err)
 
 	// ack returned from chain C to chain B
-	err = routerModule.OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr)
 	require.NoError(t, err)
 }
