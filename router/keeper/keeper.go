@@ -6,79 +6,70 @@ import (
 	"time"
 
 	"github.com/armon/go-metrics"
-	"github.com/tendermint/tendermint/libs/log"
-
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v3/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
 	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
+	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
 	coretypes "github.com/cosmos/ibc-go/v3/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
+	"github.com/tendermint/tendermint/libs/log"
 )
 
-// Keeper defines the IBC fungible transfer keeper
-type Keeper struct {
-	storeKey   storetypes.StoreKey
-	cdc        codec.BinaryCodec
-	paramSpace paramtypes.Subspace
-
-	transferKeeper types.TransferKeeper
-	channelKeeper  types.ChannelKeeper
-	distrKeeper    types.DistributionKeeper
-	bankKeeper     types.BankKeeper
-}
-
-type PacketMetadata struct {
-	Forward *ForwardMetadata `json:"forward"`
-}
-
-type ForwardMetadata struct {
-	Receiver string        `json:"receiver,omitempty"`
-	Port     string        `json:"port,omitempty"`
-	Channel  string        `json:"channel,omitempty"`
-	Timeout  time.Duration `json:"timeout,omitempty"`
-	Retries  *uint8        `json:"retries,omitempty"`
-	Next     *string       `json:"next,omitempty"`
-}
-
-func (m *ForwardMetadata) Validate() error {
-	if m.Receiver == "" {
-		return fmt.Errorf("failed to validate forward metadata. receiver cannot be empty")
-	}
-	if err := host.PortIdentifierValidator(m.Port); err != nil {
-		return fmt.Errorf("failed to validate forward metadata: %w", err)
-	}
-	if err := host.ChannelIdentifierValidator(m.Channel); err != nil {
-		return fmt.Errorf("failed to validate forward metadata: %w", err)
-	}
-
-	return nil
-}
+// Middleware must implement types.ChannelKeeper and types.PortKeeper, expected interfaces
+// so that it can wrap IBC channel and port logic for underlying application.
+var (
+	_ types.ChannelKeeper = Keeper{}
+	_ types.PortKeeper    = Keeper{}
+)
 
 var (
-	// Timeout height following IBC defaults
+	// DefaultTransferPacketTimeoutHeight is the timeout height following IBC defaults
 	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
 		RevisionNumber: 0,
 		RevisionHeight: 0,
 	}
-	// Timeout timestamp following IBC defaults
+
+	// DefaultForwardTransferPacketTimeoutTimestamp is the timeout timestamp following IBC defaults
 	DefaultForwardTransferPacketTimeoutTimestamp = time.Duration(transfertypes.DefaultRelativePacketTimeoutTimestamp) * time.Nanosecond
 
-	// 28 day timeout for refund packets since funds are stuck in router module otherwise.
+	// DefaultRefundTransferPacketTimeoutTimestamp is a 28-day timeout for refund packets since funds are stuck in router module otherwise.
 	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
 )
 
-// NewKeeper creates a new 29-fee Keeper instance
+// Keeper defines the packet forward middleware keeper
+type Keeper struct {
+	cdc        codec.BinaryCodec
+	storeKey   storetypes.StoreKey
+	paramSpace paramtypes.Subspace
+
+	transferKeeper types.TransferKeeper
+	channelKeeper  types.ChannelKeeper
+	portKeeper     types.PortKeeper
+	distrKeeper    types.DistributionKeeper
+	bankKeeper     types.BankKeeper
+	ics4Wrapper    porttypes.ICS4Wrapper
+}
+
+// NewKeeper creates a new forward Keeper instance
 func NewKeeper(
-	cdc codec.BinaryCodec, key storetypes.StoreKey, paramSpace paramtypes.Subspace,
-	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper,
-	distrKeeper types.DistributionKeeper, bankKeeper types.BankKeeper,
+	cdc codec.BinaryCodec,
+	key storetypes.StoreKey,
+	paramSpace paramtypes.Subspace,
+	transferKeeper types.TransferKeeper,
+	channelKeeper types.ChannelKeeper,
+	distrKeeper types.DistributionKeeper,
+	bankKeeper types.BankKeeper,
+	portKeeper types.PortKeeper,
+	ics4Wrapper porttypes.ICS4Wrapper,
 ) Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
@@ -94,6 +85,8 @@ func NewKeeper(
 		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
 		bankKeeper:     bankKeeper,
+		portKeeper:     portKeeper,
+		ics4Wrapper:    ics4Wrapper,
 	}
 }
 
@@ -193,7 +186,7 @@ func (k Keeper) ForwardTransferPacket(
 	srcPacket channeltypes.Packet,
 	srcPacketSender string,
 	receiver string,
-	metadata *ForwardMetadata,
+	metadata *types.ForwardMetadata,
 	token sdk.Coin,
 	maxRetries uint8,
 	timeout time.Duration,
@@ -339,7 +332,7 @@ func (k Keeper) RetryTimeout(
 	inFlightPacket *types.InFlightPacket,
 ) error {
 	// send transfer again
-	metadata := &ForwardMetadata{
+	metadata := &types.ForwardMetadata{
 		Receiver: data.Receiver,
 		Channel:  channel,
 		Port:     port,
@@ -414,4 +407,40 @@ func (k Keeper) GetAndClearInFlightPacket(
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 	return &inFlightPacket
+}
+
+// BindPort defines a wrapper function for the port Keeper's function in
+// order to expose it to module's InitGenesis function.
+func (k Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
+	return k.portKeeper.BindPort(ctx, portID)
+}
+
+// GetChannel wraps IBC ChannelKeeper's GetChannel function.
+func (k Keeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
+	return k.channelKeeper.GetChannel(ctx, portID, channelID)
+}
+
+// GetPacketCommitment wraps IBC ChannelKeeper's GetPacketCommitment function.
+func (k Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte {
+	return k.channelKeeper.GetPacketCommitment(ctx, portID, channelID, sequence)
+}
+
+// GetNextSequenceSend wraps IBC ChannelKeeper's GetNextSequenceSend function.
+func (k Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
+	return k.channelKeeper.GetNextSequenceSend(ctx, portID, channelID)
+}
+
+// SendPacket wraps IBC ChannelKeeper's SendPacket function
+func (k Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI) error {
+	return k.ics4Wrapper.SendPacket(ctx, chanCap, packet)
+}
+
+// WriteAcknowledgement wraps IBC ChannelKeeper's WriteAcknowledgement function.
+// ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
+func (k Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
+}
+
+func (k Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
+	return k.channelKeeper.LookupModuleByChannel(ctx, portID, channelID)
 }
