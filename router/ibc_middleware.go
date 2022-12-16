@@ -164,11 +164,14 @@ func (im IBCMiddleware) OnRecvPacket(
 		}
 	}
 
-	denomOnThisChain := getDenomForThisChain(
-		packet.DestinationPort, packet.DestinationChannel,
-		packet.SourcePort, packet.SourceChannel,
-		data.Denom,
-	)
+	denomOnThisChain := data.Denom
+	if strings.HasPrefix(data.Denom, "ibc/") {
+		denomOnThisChain = getDenomForThisChain(
+			packet.DestinationPort, packet.DestinationChannel,
+			packet.SourcePort, packet.SourceChannel,
+			data.Denom,
+		)
+	}
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
