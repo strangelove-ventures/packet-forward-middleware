@@ -20,6 +20,7 @@ type TransferKeeper interface {
 type ChannelKeeper interface {
 	GetChannel(ctx sdk.Context, srcPort, srcChan string) (channel channeltypes.Channel, found bool)
 	GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte
+	GetPacketReceipt(ctx sdk.Context, portID string, channelID string, sequence uint64) (string, bool)
 	GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool)
 	LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error)
 	WriteAcknowledgement(

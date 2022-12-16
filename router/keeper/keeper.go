@@ -425,6 +425,10 @@ func (k Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, s
 	return k.channelKeeper.GetPacketCommitment(ctx, portID, channelID, sequence)
 }
 
+func (k Keeper) GetPacketReceipt(ctx sdk.Context, portID string, channelID string, sequence uint64) (string, bool) {
+	return k.channelKeeper.GetPacketReceipt(ctx, portID, channelID, sequence)
+}
+
 // GetNextSequenceSend wraps IBC ChannelKeeper's GetNextSequenceSend function.
 func (k Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
 	return k.channelKeeper.GetNextSequenceSend(ctx, portID, channelID)
