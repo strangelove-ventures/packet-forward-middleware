@@ -102,6 +102,13 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	inFlightPacket *types.InFlightPacket,
 	ack channeltypes.Acknowledgement,
 ) error {
+	// if an ack has been written already avoid writing one again
+	_, found := k.GetPacketAcknowledgement(ctx, packet.DestinationPort, packet.DestinationChannel, packet.Sequence)
+	if found {
+		k.Logger(ctx).Error("PACKET ACK ALREADY EXISTS")
+		return nil
+	}
+
 	// Lookup module by channel capability
 	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
@@ -413,6 +420,10 @@ func (k Keeper) GetAndClearInFlightPacket(
 // order to expose it to module's InitGenesis function.
 func (k Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
 	return k.portKeeper.BindPort(ctx, portID)
+}
+
+func (k Keeper) GetPacketAcknowledgement(ctx sdk.Context, portID string, channelID string, sequence uint64) ([]byte, bool) {
+	return k.channelKeeper.GetPacketAcknowledgement(ctx, portID, channelID, sequence)
 }
 
 // GetChannel wraps IBC ChannelKeeper's GetChannel function.

@@ -164,6 +164,7 @@ func (im IBCMiddleware) OnRecvPacket(
 		}
 	}
 
+	// if the denom is a native token denom we do not need to change the denom
 	denomOnThisChain := data.Denom
 	if strings.HasPrefix(data.Denom, "ibc/") {
 		denomOnThisChain = getDenomForThisChain(
