@@ -15,9 +15,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/client/cli"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/client/cli"
+	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 )
 
@@ -62,7 +62,7 @@ func (AppModuleBasic) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Rout
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the ibc-router module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
-	types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx))
+	types.RegisterQueryHandlerClient(context.Background(), mux, types.NewQueryClient(clientCtx)) //nolint:errcheck
 }
 
 // GetTxCmd implements AppModuleBasic interface

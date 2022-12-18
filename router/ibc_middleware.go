@@ -10,12 +10,12 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
-	transfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v3/modules/core/05-port/types"
-	ibcexported "github.com/cosmos/ibc-go/v3/modules/core/exported"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v3/router/types"
+	transfertypes "github.com/cosmos/ibc-go/v4/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v4/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v4/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v4/modules/core/exported"
+	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/types"
 )
 
 var _ porttypes.Middleware = &IBCMiddleware{}
@@ -58,7 +58,7 @@ func (im IBCMiddleware) OnChanOpenInit(
 	chanCap *capabilitytypes.Capability,
 	counterparty channeltypes.Counterparty,
 	version string,
-) error {
+) (string, error) {
 	return im.app.OnChanOpenInit(ctx, order, connectionHops, portID, channelID, chanCap, counterparty, version)
 }
 
@@ -128,7 +128,7 @@ func (im IBCMiddleware) OnRecvPacket(
 ) ibcexported.Acknowledgement {
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
-		return channeltypes.NewErrorAcknowledgement(err.Error())
+		return channeltypes.NewErrorAcknowledgement(err)
 	}
 
 	im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket",
@@ -171,7 +171,7 @@ func (im IBCMiddleware) OnRecvPacket(
 	}
 
 	if err := metadata.Validate(); err != nil {
-		return channeltypes.NewErrorAcknowledgement(err.Error())
+		return channeltypes.NewErrorAcknowledgement(err)
 	}
 
 	// if this packet has been handled by another middleware in the stack there may be no need to call into the
@@ -197,7 +197,7 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
-		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("error parsing amount for forward: %s", data.Amount))
+		return channeltypes.NewErrorAcknowledgement(fmt.Errorf("error parsing amount for forward: %s", data.Amount))
 	}
 
 	token := sdk.NewCoin(denomOnThisChain, amountInt)
@@ -218,7 +218,7 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	err = im.keeper.ForwardTransferPacket(ctx, nil, packet, data.Sender, data.Receiver, metadata, token, retries, timeout, []metrics.Label{}, nonrefundable)
 	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(err.Error())
+		return channeltypes.NewErrorAcknowledgement(err)
 	}
 
 	// returning nil ack will prevent WriteAcknowledgement from occurring for forwarded packet.
@@ -291,7 +291,7 @@ func (im IBCMiddleware) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Pac
 			im.keeper.RemoveInFlightPacket(ctx, packet)
 			// this is a forwarded packet, so override handling to avoid refund from being processed on this chain.
 			// WriteAcknowledgement with proxied ack to return success/fail to previous chain.
-			return im.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, channeltypes.NewErrorAcknowledgement(err.Error()))
+			return im.keeper.WriteAcknowledgementForForwardedPacket(ctx, packet, data, inFlightPacket, channeltypes.NewErrorAcknowledgement(err))
 		}
 		// timeout should be retried. In order to do that, we need to handle this timeout to refund on this chain first.
 		if err := im.app.OnTimeoutPacket(ctx, packet, relayer); err != nil {
@@ -320,4 +320,8 @@ func (im IBCMiddleware) WriteAcknowledgement(
 	ack ibcexported.Acknowledgement,
 ) error {
 	return im.keeper.WriteAcknowledgement(ctx, chanCap, packet, ack)
+}
+
+func (im IBCMiddleware) GetAppVersion(ctx sdk.Context, portID string, channelID string) (string, bool) {
+	return im.keeper.GetAppVersion(ctx, portID, channelID)
 }
