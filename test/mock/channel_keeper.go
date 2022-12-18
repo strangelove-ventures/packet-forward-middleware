@@ -9,6 +9,7 @@ import (
 
 	types "github.com/cosmos/cosmos-sdk/types"
 	types0 "github.com/cosmos/cosmos-sdk/x/capability/types"
+	types1 "github.com/cosmos/ibc-go/v4/modules/core/04-channel/types"
 	exported "github.com/cosmos/ibc-go/v4/modules/core/exported"
 	gomock "github.com/golang/mock/gomock"
 )
@@ -34,6 +35,50 @@ func NewMockChannelKeeper(ctrl *gomock.Controller) *MockChannelKeeper {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockChannelKeeper) EXPECT() *MockChannelKeeperMockRecorder {
 	return m.recorder
+}
+
+// GetChannel mocks base method.
+func (m *MockChannelKeeper) GetChannel(arg0 types.Context, arg1, arg2 string) (types1.Channel, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetChannel", arg0, arg1, arg2)
+	ret0, _ := ret[0].(types1.Channel)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetChannel indicates an expected call of GetChannel.
+func (mr *MockChannelKeeperMockRecorder) GetChannel(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetChannel", reflect.TypeOf((*MockChannelKeeper)(nil).GetChannel), arg0, arg1, arg2)
+}
+
+// GetNextSequenceSend mocks base method.
+func (m *MockChannelKeeper) GetNextSequenceSend(arg0 types.Context, arg1, arg2 string) (uint64, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNextSequenceSend", arg0, arg1, arg2)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetNextSequenceSend indicates an expected call of GetNextSequenceSend.
+func (mr *MockChannelKeeperMockRecorder) GetNextSequenceSend(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextSequenceSend", reflect.TypeOf((*MockChannelKeeper)(nil).GetNextSequenceSend), arg0, arg1, arg2)
+}
+
+// GetPacketCommitment mocks base method.
+func (m *MockChannelKeeper) GetPacketCommitment(arg0 types.Context, arg1, arg2 string, arg3 uint64) []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPacketCommitment", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// GetPacketCommitment indicates an expected call of GetPacketCommitment.
+func (mr *MockChannelKeeperMockRecorder) GetPacketCommitment(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPacketCommitment", reflect.TypeOf((*MockChannelKeeper)(nil).GetPacketCommitment), arg0, arg1, arg2, arg3)
 }
 
 // LookupModuleByChannel mocks base method.
