@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package router.v1;
 
-option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v3/router/types";
+option go_package = "github.com/strangelove-ventures/packet-forward-middleware/v4/router/types";
 
 import "gogoproto/gogo.proto";
 
