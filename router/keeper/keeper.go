@@ -102,13 +102,6 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	inFlightPacket *types.InFlightPacket,
 	ack channeltypes.Acknowledgement,
 ) error {
-	// if an ack has been written already avoid writing one again
-	_, found := k.GetPacketAcknowledgement(ctx, packet.DestinationPort, packet.DestinationChannel, packet.Sequence)
-	if found {
-		k.Logger(ctx).Error("PACKET ACK ALREADY EXISTS")
-		return nil
-	}
-
 	// Lookup module by channel capability
 	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
