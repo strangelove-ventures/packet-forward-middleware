@@ -153,15 +153,10 @@ func (im IBCMiddleware) OnRecvPacket(
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	// check if this packet has been received already
-	_, found := im.keeper.GetPacketReceipt(ctx, packet.DestinationPort, packet.DestinationChannel, packet.Sequence)
-	if !found {
-		im.keeper.Logger(ctx).Error("packetForwardMiddleware packet has not been received yet")
-		ack := im.app.OnRecvPacket(ctx, packet, relayer)
-		if ack == nil || !ack.Success() {
-			im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket underlying app ack failed")
-			return ack
-		}
+	ack := im.app.OnRecvPacket(ctx, packet, relayer)
+	if ack == nil || !ack.Success() {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket underlying app ack failed")
+		return ack
 	}
 
 	denomOnThisChain := getDenomForThisChain(
