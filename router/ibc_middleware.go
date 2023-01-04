@@ -152,9 +152,14 @@ func (im IBCMiddleware) OnRecvPacket(
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	ack := im.app.OnRecvPacket(ctx, packet, relayer)
-	if ack == nil || !ack.Success() {
-		return ack
+	// if this packet has been handled by another middleware in the stack there may be no need to call into the
+	// underlying app, otherwise the transfer module's OnRecvPacket callback could be invoked more than once
+	// which would mint/burn vouchers more than once
+	if !metadata.Processed {
+		ack := im.app.OnRecvPacket(ctx, packet, relayer)
+		if ack == nil || !ack.Success() {
+			return ack
+		}
 	}
 
 	denomOnThisChain := getDenomForThisChain(
@@ -165,6 +170,7 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
+		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket failed to parse data.Amount to int")
 		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("error parsing amount for forward: %s", data.Amount))
 	}
 
