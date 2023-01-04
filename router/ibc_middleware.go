@@ -164,11 +164,17 @@ func (im IBCMiddleware) OnRecvPacket(
 		}
 	}
 
-	denomOnThisChain := getDenomForThisChain(
-		packet.DestinationPort, packet.DestinationChannel,
-		packet.SourcePort, packet.SourceChannel,
-		data.Denom,
-	)
+	// if this packet's token denom is already the base denom for some native token on this chain,
+	// we do not need to do any further composition of the denom before forwarding the packet
+	denomTrace := transfertypes.ParseDenomTrace(data.Denom)
+	denomOnThisChain := data.Denom
+	if denomTrace.Path != "" {
+		denomOnThisChain = getDenomForThisChain(
+			packet.DestinationPort, packet.DestinationChannel,
+			packet.SourcePort, packet.SourceChannel,
+			data.Denom,
+		)
+	}
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
