@@ -18,6 +18,7 @@ type ForwardMetadata struct {
 	Timeout       time.Duration `json:"timeout,omitempty"`
 	Retries       *uint8        `json:"retries,omitempty"`
 	Nonrefundable bool          `json:"nonrefundable,omitempty"`
+	Processed     bool          `json:"processed,omitempty"`
 	Next          *string       `json:"next,omitempty"`
 }
 

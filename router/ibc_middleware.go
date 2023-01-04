@@ -153,10 +153,15 @@ func (im IBCMiddleware) OnRecvPacket(
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	ack := im.app.OnRecvPacket(ctx, packet, relayer)
-	if ack == nil || !ack.Success() {
-		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket underlying app ack failed")
-		return ack
+	// if this packet has been handled by another middleware in the stack there is no need to call into the
+	// underlying app, otherwise the transfer module's OnRecvPacket callback could be invoked more than once
+	// which would mint/burn vouchers more than once
+	if !metadata.Processed {
+		ack := im.app.OnRecvPacket(ctx, packet, relayer)
+		if ack == nil || !ack.Success() {
+			im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket underlying app ack failed")
+			return ack
+		}
 	}
 
 	denomOnThisChain := getDenomForThisChain(
