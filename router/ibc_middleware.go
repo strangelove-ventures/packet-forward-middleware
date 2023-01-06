@@ -166,9 +166,8 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	// if this packet's token denom is already the base denom for some native token on this chain,
 	// we do not need to do any further composition of the denom before forwarding the packet
-	denomTrace := transfertypes.ParseDenomTrace(data.Denom)
 	denomOnThisChain := data.Denom
-	if denomTrace.Path != "" {
+	if !metadata.DisableDenomComposition {
 		denomOnThisChain = getDenomForThisChain(
 			packet.DestinationPort, packet.DestinationChannel,
 			packet.SourcePort, packet.SourceChannel,
