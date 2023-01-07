@@ -175,7 +175,6 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
-		im.keeper.Logger(ctx).Error("packetForwardMiddleware OnRecvPacket failed to parse data.Amount to int")
 		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("error parsing amount for forward: %s", data.Amount))
 	}
 
