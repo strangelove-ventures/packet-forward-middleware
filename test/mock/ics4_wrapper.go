@@ -37,29 +37,29 @@ func (m *MockICS4Wrapper) EXPECT() *MockICS4WrapperMockRecorder {
 }
 
 // SendPacket mocks base method.
-func (m *MockICS4Wrapper) SendPacket(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI) error {
+func (m *MockICS4Wrapper) SendPacket(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.MiddlewareData) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendPacket", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SendPacket", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendPacket indicates an expected call of SendPacket.
-func (mr *MockICS4WrapperMockRecorder) SendPacket(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockICS4WrapperMockRecorder) SendPacket(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacket", reflect.TypeOf((*MockICS4Wrapper)(nil).SendPacket), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendPacket", reflect.TypeOf((*MockICS4Wrapper)(nil).SendPacket), arg0, arg1, arg2, arg3)
 }
 
 // WriteAcknowledgement mocks base method.
-func (m *MockICS4Wrapper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement) error {
+func (m *MockICS4Wrapper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement, arg4 exported.MiddlewareData) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WriteAcknowledgement indicates an expected call of WriteAcknowledgement.
-func (mr *MockICS4WrapperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockICS4WrapperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockICS4Wrapper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockICS4Wrapper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3, arg4)
 }

@@ -27,6 +27,7 @@ type ChannelKeeper interface {
 		chanCap *capabilitytypes.Capability,
 		packet exported.PacketI,
 		ack exported.Acknowledgement,
+		middlewareData exported.MiddlewareData,
 	) error
 }
 

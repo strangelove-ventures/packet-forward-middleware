@@ -127,7 +127,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 				DestinationChannel: inFlightPacket.RefundChannelId,
 				TimeoutHeight:      clienttypes.MustParseHeight(inFlightPacket.PacketTimeoutHeight),
 				TimeoutTimestamp:   inFlightPacket.PacketTimeoutTimestamp,
-			}, newAck)
+			}, newAck, nil)
 		}
 
 		fullDenomPath := data.Denom
@@ -195,7 +195,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 		DestinationChannel: inFlightPacket.RefundChannelId,
 		TimeoutHeight:      clienttypes.MustParseHeight(inFlightPacket.PacketTimeoutHeight),
 		TimeoutTimestamp:   inFlightPacket.PacketTimeoutTimestamp,
-	}, ack)
+	}, ack, nil)
 }
 
 func (k Keeper) ForwardTransferPacket(
@@ -209,6 +209,7 @@ func (k Keeper) ForwardTransferPacket(
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
+	nonrefundable bool,
 ) error {
 	var err error
 	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
@@ -286,7 +287,7 @@ func (k Keeper) ForwardTransferPacket(
 
 			RetriesRemaining: int32(maxRetries),
 			Timeout:          uint64(timeout.Nanoseconds()),
-			Nonrefundable:    metadata.Nonrefundable,
+			Nonrefundable:    nonrefundable,
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -389,6 +390,7 @@ func (k Keeper) RetryTimeout(
 		uint8(inFlightPacket.RetriesRemaining),
 		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
 		nil,
+		inFlightPacket.Nonrefundable,
 	)
 }
 
@@ -450,14 +452,14 @@ func (k Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (
 }
 
 // SendPacket wraps IBC ChannelKeeper's SendPacket function
-func (k Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI) error {
-	return k.ics4Wrapper.SendPacket(ctx, chanCap, packet)
+func (k Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, middlewareData ibcexported.MiddlewareData) error {
+	return k.ics4Wrapper.SendPacket(ctx, chanCap, packet, middlewareData)
 }
 
 // WriteAcknowledgement wraps IBC ChannelKeeper's WriteAcknowledgement function.
 // ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
-func (k Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
-	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
+func (k Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement, middlewareData ibcexported.MiddlewareData) error {
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement, middlewareData)
 }
 
 func (k Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {

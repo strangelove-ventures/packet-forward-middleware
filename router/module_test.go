@@ -71,7 +71,7 @@ func TestOnRecvPacket_EmptyPacket(t *testing.T) {
 	senderAccAddr := test.AccAddress()
 	packet := emptyPacket()
 
-	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr, nil)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -94,11 +94,11 @@ func TestOnRecvPacket_InvalidReceiver(t *testing.T) {
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr, nil).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 	)
 
-	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr, nil)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -120,11 +120,11 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr, nil).
 			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
 	)
 
-	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr, nil)
 	require.True(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -147,11 +147,11 @@ func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	// Expected mocks
 	gomock.InOrder(
 		// We return a failed OnRecvPacket
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr, nil).
 			Return(channeltypes.NewErrorAcknowledgement("test")),
 	)
 
-	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr, nil)
 	require.False(t, ack.Success())
 
 	expectedAck := &channeltypes.Acknowledgement{}
@@ -191,7 +191,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr, nil).
 			Return(acknowledgement),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
@@ -207,16 +207,16 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 			),
 		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr, nil).
 			Return(nil),
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr, nil)
 	require.Nil(t, ack)
 
 	// ack returned from chain C
-	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr, nil)
 	require.NoError(t, err)
 }
 
@@ -255,7 +255,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr, nil).
 			Return(acknowledgement),
 
 		setup.Mocks.DistributionKeeperMock.EXPECT().FundCommunityPool(
@@ -277,16 +277,16 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 			),
 		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr, nil).
 			Return(nil),
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr, nil)
 	require.Nil(t, ack)
 
 	// ack returned from chain C
-	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr, nil)
 	require.NoError(t, err)
 }
 
@@ -362,7 +362,7 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 
 	// Expected mocks
 	gomock.InOrder(
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr, nil).
 			Return(acknowledgement),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
@@ -370,7 +370,7 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 			msgTransfer1,
 		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2, nil).
 			Return(acknowledgement),
 
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
@@ -378,26 +378,26 @@ func TestOnRecvPacket_ForwardMultihop(t *testing.T) {
 			msgTransfer2,
 		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
 
-		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2, nil).
 			Return(nil),
 
-		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr).
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr, nil).
 			Return(nil),
 	)
 
 	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr, nil)
 	require.Nil(t, ack)
 
 	// chain C with router module receives packet and forwards. ack should be nil so that it is not written yet.
-	ack = forwardMiddleware.OnRecvPacket(ctx, packet2, senderAccAddr2)
+	ack = forwardMiddleware.OnRecvPacket(ctx, packet2, senderAccAddr2, nil)
 	require.Nil(t, ack)
 
 	// ack returned from chain D to chain C
-	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2, nil)
 	require.NoError(t, err)
 
 	// ack returned from chain C to chain B
-	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr)
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packet2, successAck, senderAccAddr, nil)
 	require.NoError(t, err)
 }

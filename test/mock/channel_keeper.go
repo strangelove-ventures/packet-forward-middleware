@@ -98,15 +98,15 @@ func (mr *MockChannelKeeperMockRecorder) LookupModuleByChannel(arg0, arg1, arg2 
 }
 
 // WriteAcknowledgement mocks base method.
-func (m *MockChannelKeeper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement) error {
+func (m *MockChannelKeeper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement, arg4 exported.MiddlewareData) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WriteAcknowledgement indicates an expected call of WriteAcknowledgement.
-func (mr *MockChannelKeeperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockChannelKeeperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockChannelKeeper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockChannelKeeper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3, arg4)
 }

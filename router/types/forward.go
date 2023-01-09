@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cosmos/ibc-go/v3/modules/core/24-host"
+	host "github.com/cosmos/ibc-go/v3/modules/core/24-host"
 )
 
 type PacketMetadata struct {
@@ -12,15 +12,12 @@ type PacketMetadata struct {
 }
 
 type ForwardMetadata struct {
-	Receiver                string        `json:"receiver,omitempty"`
-	Port                    string        `json:"port,omitempty"`
-	Channel                 string        `json:"channel,omitempty"`
-	Timeout                 time.Duration `json:"timeout,omitempty"`
-	Retries                 *uint8        `json:"retries,omitempty"`
-	Nonrefundable           bool          `json:"nonrefundable,omitempty"`
-	Processed               bool          `json:"processed,omitempty"`
-	DisableDenomComposition bool          `json:"disable_denom_composition,omitempty"`
-	Next                    *string       `json:"next,omitempty"`
+	Receiver string        `json:"receiver,omitempty"`
+	Port     string        `json:"port,omitempty"`
+	Channel  string        `json:"channel,omitempty"`
+	Timeout  time.Duration `json:"timeout,omitempty"`
+	Retries  *uint8        `json:"retries,omitempty"`
+	Next     *string       `json:"next,omitempty"`
 }
 
 func (m *ForwardMetadata) Validate() error {
