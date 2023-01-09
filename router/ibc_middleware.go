@@ -149,9 +149,10 @@ func (im IBCMiddleware) OnRecvPacket(
 	metadata := m.Forward
 
 	var processed, nonrefundable, disableDenomComposition bool
-	p := ctx.Context().Value("processed")
-	nr := ctx.Context().Value("nonrefundable")
-	ddc := ctx.Context().Value("disableDenomComposition")
+	goCtx := ctx.Context()
+	p := goCtx.Value("processed")
+	nr := goCtx.Value("nonrefundable")
+	ddc := goCtx.Value("disableDenomComposition")
 
 	if p != nil {
 		if pb, ok := p.(bool); ok {
