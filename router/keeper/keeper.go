@@ -209,6 +209,7 @@ func (k Keeper) ForwardTransferPacket(
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
+	nonrefundable bool,
 ) error {
 	var err error
 	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
@@ -286,7 +287,7 @@ func (k Keeper) ForwardTransferPacket(
 
 			RetriesRemaining: int32(maxRetries),
 			Timeout:          uint64(timeout.Nanoseconds()),
-			Nonrefundable:    metadata.Nonrefundable,
+			Nonrefundable:    nonrefundable,
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -389,6 +390,7 @@ func (k Keeper) RetryTimeout(
 		uint8(inFlightPacket.RetriesRemaining),
 		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
 		nil,
+		inFlightPacket.Nonrefundable,
 	)
 }
 
