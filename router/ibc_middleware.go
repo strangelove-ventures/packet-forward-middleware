@@ -152,16 +152,26 @@ func (im IBCMiddleware) OnRecvPacket(
 		return channeltypes.NewErrorAcknowledgement(err.Error())
 	}
 
-	ack := im.app.OnRecvPacket(ctx, packet, relayer)
-	if ack == nil || !ack.Success() {
-		return ack
+	// if this packet has been handled by another middleware in the stack there may be no need to call into the
+	// underlying app, otherwise the transfer module's OnRecvPacket callback could be invoked more than once
+	// which would mint/burn vouchers more than once
+	if !metadata.Processed {
+		ack := im.app.OnRecvPacket(ctx, packet, relayer)
+		if ack == nil || !ack.Success() {
+			return ack
+		}
 	}
 
-	denomOnThisChain := getDenomForThisChain(
-		packet.DestinationPort, packet.DestinationChannel,
-		packet.SourcePort, packet.SourceChannel,
-		data.Denom,
-	)
+	// if this packet's token denom is already the base denom for some native token on this chain,
+	// we do not need to do any further composition of the denom before forwarding the packet
+	denomOnThisChain := data.Denom
+	if !metadata.DisableDenomComposition {
+		denomOnThisChain = getDenomForThisChain(
+			packet.DestinationPort, packet.DestinationChannel,
+			packet.SourcePort, packet.SourceChannel,
+			data.Denom,
+		)
+	}
 
 	amountInt, ok := sdk.NewIntFromString(data.Amount)
 	if !ok {
