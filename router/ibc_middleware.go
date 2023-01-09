@@ -150,9 +150,9 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	var processed, nonrefundable, disableDenomComposition bool
 	goCtx := ctx.Context()
-	p := goCtx.Value("processed")
-	nr := goCtx.Value("nonrefundable")
-	ddc := goCtx.Value("disableDenomComposition")
+	p := goCtx.Value(types.ProcessedKey{})
+	nr := goCtx.Value(types.NonrefundableKey{})
+	ddc := goCtx.Value(types.DisableDenomCompositionKey{})
 
 	if p != nil {
 		if pb, ok := p.(bool); ok {
