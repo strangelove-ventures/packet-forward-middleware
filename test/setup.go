@@ -23,7 +23,7 @@ import (
 	tmdb "github.com/tendermint/tm-db"
 )
 
-func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
+func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 	initializer := newInitializer()
 
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
@@ -41,7 +41,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 
 	routerKeeper.SetParams(initializer.Ctx, types.DefaultParams())
 
-	return &TestSetup{
+	return &Setup{
 		Initializer: initializer,
 
 		Keepers: &testKeepers{
@@ -62,7 +62,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	}
 }
 
-type TestSetup struct {
+type Setup struct {
 	Initializer initializer
 
 	Keepers *testKeepers
@@ -152,10 +152,6 @@ func (i initializer) routerKeeper(
 	)
 
 	return routerKeeper
-}
-
-func (i initializer) routerModule(routerKeeper keeper.Keeper) router.AppModule {
-	return router.NewAppModule(routerKeeper)
 }
 
 func (i initializer) forwardMiddleware(app porttypes.IBCModule, k keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {

@@ -170,10 +170,10 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 	forwardMiddleware := setup.ForwardMiddleware
 
 	// Test data
-	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
-	destAddr := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
-	port := "transfer"
-	channel := "channel-0"
+	hostAddr := "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs" //nolint:goconst
+	destAddr := "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k" //nolint:goconst
+	port := "transfer"                                          //nolint:goconst
+	channel := "channel-0"                                      //nolint:goconst
 	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
 	senderAccAddr := test.AccAddress()
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
