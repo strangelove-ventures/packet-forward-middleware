@@ -37,7 +37,6 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	paramsKeeper := initializer.paramsKeeper()
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, portKeeperMock, ics4WrapperMock)
 
-
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
 
 	routerKeeper.SetParams(initializer.Ctx, types.DefaultParams())
