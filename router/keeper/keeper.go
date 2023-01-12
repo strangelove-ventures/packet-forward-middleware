@@ -112,6 +112,24 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	// On an ack error or timeout on a forwarded packet, the funds in the escrow account
 	// should be moved to the other escrow account on the other side or burned.
 	if !ack.Success() {
+		// If this packet is non-refundable due to some action that took place between the initial ibc transfer and the forward
+		// we write a successful ack containing details on what happened regardless of ack error or timeout
+		if inFlightPacket.Nonrefundable {
+			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
+			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
+
+			return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+				Data:               inFlightPacket.PacketData,
+				Sequence:           inFlightPacket.RefundSequence,
+				SourcePort:         inFlightPacket.PacketSrcPortId,
+				SourceChannel:      inFlightPacket.PacketSrcChannelId,
+				DestinationPort:    inFlightPacket.RefundPortId,
+				DestinationChannel: inFlightPacket.RefundChannelId,
+				TimeoutHeight:      clienttypes.MustParseHeight(inFlightPacket.PacketTimeoutHeight),
+				TimeoutTimestamp:   inFlightPacket.PacketTimeoutTimestamp,
+			}, newAck)
+		}
+
 		fullDenomPath := data.Denom
 
 		// deconstruct the token denomination into the denomination trace info
@@ -191,6 +209,7 @@ func (k Keeper) ForwardTransferPacket(
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
+	nonrefundable bool,
 ) error {
 	var err error
 	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
@@ -268,6 +287,7 @@ func (k Keeper) ForwardTransferPacket(
 
 			RetriesRemaining: int32(maxRetries),
 			Timeout:          uint64(timeout.Nanoseconds()),
+			Nonrefundable:    nonrefundable,
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -370,6 +390,7 @@ func (k Keeper) RetryTimeout(
 		uint8(inFlightPacket.RetriesRemaining),
 		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
 		nil,
+		inFlightPacket.Nonrefundable,
 	)
 }
 
