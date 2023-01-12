@@ -363,7 +363,7 @@ func (k Keeper) RetryTimeout(
 
 	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
 
-	var token = sdk.NewCoin(denom, amount)
+	token := sdk.NewCoin(denom, amount)
 
 	// srcPacket and srcPacketSender are empty because inFlightPacket is non-nil.
 	return k.ForwardTransferPacket(
