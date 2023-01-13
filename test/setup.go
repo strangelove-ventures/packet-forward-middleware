@@ -47,7 +47,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 
 		Keepers: &testKeepers{
 			ParamsKeeper: &paramsKeeper,
-			RouterKeeper: &routerKeeper,
+			RouterKeeper: routerKeeper,
 		},
 
 		Mocks: &testMocks{
@@ -135,7 +135,7 @@ func (i initializer) routerKeeper(
 	bankKeeper types.BankKeeper,
 	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
-) keeper.Keeper {
+) *keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
 	i.StateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, i.DB)
 
@@ -159,6 +159,6 @@ func (i initializer) routerModule(routerKeeper keeper.Keeper) router.AppModule {
 	return router.NewAppModule(routerKeeper)
 }
 
-func (i initializer) forwardMiddleware(app porttypes.IBCModule, k keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
+func (i initializer) forwardMiddleware(app porttypes.IBCModule, k *keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
 	return router.NewIBCMiddleware(app, k, retriesOnTimeout, forwardTimeout, refundTimeout)
 }
