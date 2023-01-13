@@ -7,10 +7,12 @@ package mock
 import (
 	reflect "reflect"
 
-	types "github.com/cosmos/cosmos-sdk/types"
-	types0 "github.com/cosmos/cosmos-sdk/x/capability/types"
-	exported "github.com/cosmos/ibc-go/v6/modules/core/exported"
+	
 	gomock "github.com/golang/mock/gomock"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
+	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
+	ibcexported "github.com/cosmos/ibc-go/v6/modules/core/exported"
 )
 
 // MockChannelKeeper is a mock of ChannelKeeper interface.
@@ -37,11 +39,11 @@ func (m *MockChannelKeeper) EXPECT() *MockChannelKeeperMockRecorder {
 }
 
 // LookupModuleByChannel mocks base method.
-func (m *MockChannelKeeper) LookupModuleByChannel(arg0 types.Context, arg1, arg2 string) (string, *types0.Capability, error) {
+func (m *MockChannelKeeper) LookupModuleByChannel(arg0 sdk.Context, arg1, arg2 string) (string, *capabilitytypes.Capability, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LookupModuleByChannel", arg0, arg1, arg2)
 	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(*types0.Capability)
+	ret1, _ := ret[1].(*capabilitytypes.Capability)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
@@ -53,7 +55,7 @@ func (mr *MockChannelKeeperMockRecorder) LookupModuleByChannel(arg0, arg1, arg2 
 }
 
 // WriteAcknowledgement mocks base method.
-func (m *MockChannelKeeper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement) error {
+func (m *MockChannelKeeper) WriteAcknowledgement(arg0 sdk.Context, arg1 *capabilitytypes.Capability, arg2 ibcexported.PacketI, arg3 ibcexported.Acknowledgement) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
@@ -64,4 +66,26 @@ func (m *MockChannelKeeper) WriteAcknowledgement(arg0 types.Context, arg1 *types
 func (mr *MockChannelKeeperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockChannelKeeper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3)
+}
+
+// SendPacket implements the ICS4Wrapper interface
+func (m *MockChannelKeeper) SendPacket(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	sourcePort string,
+	sourceChannel string,
+	timeoutHeight clienttypes.Height,
+	timeoutTimestamp uint64,
+	data []byte,
+) (sequence uint64, err error) {
+	panic("Not implemented for mock")
+}
+
+// GetAppVersion implements the ICS4Wrapper interface
+func (m *MockChannelKeeper) GetAppVersion(
+	ctx sdk.Context,
+	portID,
+	channelID string,
+) (string, bool) {
+	panic("Not implemented for mock")
 }

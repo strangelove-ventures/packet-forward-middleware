@@ -13,16 +13,21 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
 	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	ibcexported "github.com/cosmos/ibc-go/v6/modules/core/exported"
 	coretypes "github.com/cosmos/ibc-go/v6/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
 )
 
-// Keeper defines the IBC fungible transfer keeper
+var _ porttypes.ICS4Wrapper = Keeper{}
+
+// Keeper defines the IBC packet forward middleware keeper
 type Keeper struct {
 	storeKey   storetypes.StoreKey
 	cdc        codec.BinaryCodec
@@ -74,7 +79,7 @@ var (
 	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
 )
 
-// NewKeeper creates a new 29-fee Keeper instance
+// NewKeeper creates a new router Keeper instance
 func NewKeeper(
 	cdc codec.BinaryCodec, key storetypes.StoreKey, paramSpace paramtypes.Subspace,
 	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper,
@@ -416,4 +421,37 @@ func (k Keeper) GetAndClearInFlightPacket(
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 	return &inFlightPacket
+}
+
+// SendPacket implements the ICS4Wrapper interface
+func (k Keeper) SendPacket(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	sourcePort string,
+	sourceChannel string,
+	timeoutHeight clienttypes.Height,
+	timeoutTimestamp uint64,
+	data []byte,
+) (sequence uint64, err error) {
+	return k.channelKeeper.SendPacket(ctx, chanCap, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, data)
+}
+
+// WriteAcknowledgement implements the ICS4Wrapper interface
+// TODO: replace WriteAcknowledgementForForwardedPacket with this function
+func (k Keeper) WriteAcknowledgement(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	packet ibcexported.PacketI,
+	ack ibcexported.Acknowledgement,
+) error {
+	return k.channelKeeper.WriteAcknowledgement(ctx, chanCap, packet, ack)
+}
+
+// GetAppVersion implements the ICS4Wrapper interface
+func (k Keeper) GetAppVersion(
+	ctx sdk.Context,
+	portID,
+	channelID string,
+) (string, bool) {
+	return k.channelKeeper.GetAppVersion(ctx, portID, channelID)
 }

@@ -6,6 +6,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	"github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
 	"github.com/cosmos/ibc-go/v6/modules/core/exported"
 )
 
@@ -18,12 +19,29 @@ type TransferKeeper interface {
 // ChannelKeeper defines the expected IBC channel keeper
 type ChannelKeeper interface {
 	LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error)
+
+	SendPacket(
+		ctx sdk.Context,
+		chanCap *capabilitytypes.Capability,
+		sourcePort string,
+		sourceChannel string,
+		timeoutHeight clienttypes.Height,
+		timeoutTimestamp uint64,
+		data []byte,
+	) (sequence uint64, err error)
+
 	WriteAcknowledgement(
 		ctx sdk.Context,
 		chanCap *capabilitytypes.Capability,
 		packet exported.PacketI,
 		ack exported.Acknowledgement,
 	) error
+
+	GetAppVersion(
+		ctx sdk.Context,
+		portID,
+		channelID string,
+	) (string, bool)
 }
 
 // DistributionKeeper defines the expected distribution keeper

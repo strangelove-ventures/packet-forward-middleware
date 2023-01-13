@@ -18,6 +18,7 @@ import (
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
 	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
 	ibcexported "github.com/cosmos/ibc-go/v6/modules/core/exported"
@@ -33,7 +34,7 @@ import (
 var (
 	_ module.AppModule      = AppModule{}
 	_ module.AppModuleBasic = AppModuleBasic{}
-	_ porttypes.IBCModule   = AppModule{}
+	_ porttypes.Middleware  = AppModule{}
 )
 
 // AppModuleBasic is the router AppModuleBasic
@@ -187,14 +188,14 @@ func (am AppModule) WeightedOperations(_ module.SimulationState) []simtypes.Weig
 
 // ICS 30 callbacks
 
-// OnChanOpenInit implements the IBCModule interface
+// OnChanOpenInit implements the IBC Middleware interface
 func (am AppModule) OnChanOpenInit(ctx sdk.Context, order channeltypes.Order, connectionHops []string, portID string, channelID string, chanCap *capabilitytypes.Capability, counterparty channeltypes.Counterparty, version string) (string, error) {
 	// call underlying app's (transfer) callback
 	return am.app.OnChanOpenInit(ctx, order, connectionHops, portID, channelID,
 		chanCap, counterparty, version)
 }
 
-// OnChanOpenTry implements the IBCModule interface
+// OnChanOpenTry implements the IBC Middleware interface
 func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, connectionHops []string, portID, channelID string, chanCap *capabilitytypes.Capability, counterparty channeltypes.Counterparty, counterpartyVersion string,
 ) (version string, err error) {
 	// call underlying app's (transfer) callback
@@ -202,24 +203,24 @@ func (am AppModule) OnChanOpenTry(ctx sdk.Context, order channeltypes.Order, con
 		chanCap, counterparty, counterpartyVersion)
 }
 
-// OnChanOpenAck implements the IBCModule interface
+// OnChanOpenAck implements the IBC Middleware interface
 func (am AppModule) OnChanOpenAck(ctx sdk.Context, portID, channelID string, counterpartyChannelID string, counterpartyVersion string) error {
 	return am.app.OnChanOpenAck(ctx, portID, channelID, counterpartyChannelID, counterpartyVersion)
 }
 
-// OnChanOpenConfirm implements the IBCModule interface
+// OnChanOpenConfirm implements the IBC Middleware interface
 func (am AppModule) OnChanOpenConfirm(ctx sdk.Context, portID, channelID string) error {
 	// call underlying app's OnChanOpenConfirm callback.
 	return am.app.OnChanOpenConfirm(ctx, portID, channelID)
 }
 
-// OnChanCloseInit implements the IBCModule interface
+// OnChanCloseInit implements the IBC Middleware interface
 func (am AppModule) OnChanCloseInit(ctx sdk.Context, portID, channelID string) error {
 	// TODO: Unescrow all remaining funds for unprocessed packets
 	return am.app.OnChanCloseInit(ctx, portID, channelID)
 }
 
-// OnChanCloseConfirm implements the IBCModule interface
+// OnChanCloseConfirm implements the IBC Middleware interface
 func (am AppModule) OnChanCloseConfirm(ctx sdk.Context, portID, channelID string) error {
 	// TODO: Unescrow all remaining funds for unprocessed packets
 	return am.app.OnChanCloseConfirm(ctx, portID, channelID)
@@ -243,7 +244,7 @@ func GetDenomForThisChain(port, channel, counterpartyPort, counterpartyChannel, 
 	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 }
 
-// OnRecvPacket implements the IBCModule interface.
+// OnRecvPacket implements the IBC Middleware interface.
 func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) ibcexported.Acknowledgement {
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
@@ -313,7 +314,7 @@ func (am AppModule) OnRecvPacket(ctx sdk.Context, packet channeltypes.Packet, re
 	return nil
 }
 
-// OnAcknowledgementPacket implements the IBCModule interface
+// OnAcknowledgementPacket implements the IBC Middleware interface
 func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes.Packet, acknowledgement []byte, relayer sdk.AccAddress) error {
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
@@ -347,7 +348,7 @@ func (am AppModule) OnAcknowledgementPacket(ctx sdk.Context, packet channeltypes
 	return am.app.OnAcknowledgementPacket(ctx, packet, acknowledgement, relayer)
 }
 
-// OnTimeoutPacket implements the IBCModule interface
+// OnTimeoutPacket implements the IBC Middleware interface
 func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet, relayer sdk.AccAddress) error {
 	var data transfertypes.FungibleTokenPacketData
 	if err := transfertypes.ModuleCdc.UnmarshalJSON(packet.GetData(), &data); err != nil {
@@ -383,4 +384,36 @@ func (am AppModule) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Packet,
 	}
 
 	return am.app.OnTimeoutPacket(ctx, packet, relayer)
+}
+
+// SendPacket implements the IBC Middleware interface
+func (am AppModule) SendPacket(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	sourcePort string,
+	sourceChannel string,
+	timeoutHeight clienttypes.Height,
+	timeoutTimestamp uint64,
+	data []byte,
+) (sequence uint64, err error) {
+	return am.keeper.SendPacket(ctx, chanCap, sourcePort, sourceChannel, timeoutHeight, timeoutTimestamp, data)
+}
+
+// WriteAcknowledgement implements the IBC Middleware interface
+func (am AppModule) WriteAcknowledgement(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	packet ibcexported.PacketI,
+	ack ibcexported.Acknowledgement,
+) error {
+	return am.keeper.WriteAcknowledgement(ctx, chanCap, packet, ack)
+}
+
+// GetAppVersion implements the IBC Middleware interface
+func (am AppModule) GetAppVersion(
+	ctx sdk.Context,
+	portID,
+	channelID string,
+) (string, bool) {
+	return am.keeper.GetAppVersion(ctx, portID, channelID)
 }
