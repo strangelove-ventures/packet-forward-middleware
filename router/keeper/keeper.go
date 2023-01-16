@@ -27,8 +27,8 @@ import (
 // Middleware must implement types.ChannelKeeper and types.PortKeeper, expected interfaces
 // so that it can wrap IBC channel and port logic for underlying application.
 var (
-	_ types.ChannelKeeper = Keeper{}
-	_ types.PortKeeper    = Keeper{}
+	_ types.ChannelKeeper = &Keeper{}
+	_ types.PortKeeper    = &Keeper{}
 )
 
 var (
@@ -70,13 +70,13 @@ func NewKeeper(
 	bankKeeper types.BankKeeper,
 	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
-) Keeper {
+) *Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
 		paramSpace = paramSpace.WithKeyTable(types.ParamKeyTable())
 	}
 
-	return Keeper{
+	return &Keeper{
 		cdc:            cdc,
 		storeKey:       key,
 		transferKeeper: transferKeeper,
@@ -89,12 +89,17 @@ func NewKeeper(
 	}
 }
 
+// SetTransferKeeper sets the transferKeeper
+func (k *Keeper) SetTransferKeeper(transferKeeper types.TransferKeeper) {
+	k.transferKeeper = transferKeeper
+}
+
 // Logger returns a module-specific logger.
-func (k Keeper) Logger(ctx sdk.Context) log.Logger {
+func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) WriteAcknowledgementForForwardedPacket(
+func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 	data transfertypes.FungibleTokenPacketData,
@@ -197,7 +202,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	}, ack)
 }
 
-func (k Keeper) ForwardTransferPacket(
+func (k *Keeper) ForwardTransferPacket(
 	ctx sdk.Context,
 	inFlightPacket *types.InFlightPacket,
 	srcPacket channeltypes.Packet,
@@ -317,7 +322,7 @@ func (k Keeper) ForwardTransferPacket(
 }
 
 // TimeoutShouldRetry returns inFlightPacket and no error if retry should be attempted. Error is returned if IBC refund should occur.
-func (k Keeper) TimeoutShouldRetry(
+func (k *Keeper) TimeoutShouldRetry(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 ) (*types.InFlightPacket, error) {
@@ -347,7 +352,7 @@ func (k Keeper) TimeoutShouldRetry(
 	return &inFlightPacket, nil
 }
 
-func (k Keeper) RetryTimeout(
+func (k *Keeper) RetryTimeout(
 	ctx sdk.Context,
 	channel, port string,
 	data transfertypes.FungibleTokenPacketData,
@@ -396,7 +401,7 @@ func (k Keeper) RetryTimeout(
 	)
 }
 
-func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
+func (k *Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
@@ -409,7 +414,7 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 }
 
 // GetAndClearInFlightPacket will fetch an InFlightPacket from the store, remove it if it exists, and return it.
-func (k Keeper) GetAndClearInFlightPacket(
+func (k *Keeper) GetAndClearInFlightPacket(
 	ctx sdk.Context,
 	channel string,
 	port string,
@@ -434,22 +439,22 @@ func (k Keeper) GetAndClearInFlightPacket(
 
 // BindPort defines a wrapper function for the port Keeper's function in
 // order to expose it to module's InitGenesis function.
-func (k Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
+func (k *Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
 	return k.portKeeper.BindPort(ctx, portID)
 }
 
 // GetChannel wraps IBC ChannelKeeper's GetChannel function.
-func (k Keeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
+func (k *Keeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
 	return k.channelKeeper.GetChannel(ctx, portID, channelID)
 }
 
 // GetPacketCommitment wraps IBC ChannelKeeper's GetPacketCommitment function.
-func (k Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte {
+func (k *Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte {
 	return k.channelKeeper.GetPacketCommitment(ctx, portID, channelID, sequence)
 }
 
 // GetNextSequenceSend wraps IBC ChannelKeeper's GetNextSequenceSend function.
-func (k Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
+func (k *Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
 	return k.channelKeeper.GetNextSequenceSend(ctx, portID, channelID)
 }
 
@@ -467,12 +472,12 @@ func (k Keeper) SendPacket(
 
 // WriteAcknowledgement wraps IBC ICS4Wrapper WriteAcknowledgement function.
 // ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
-func (k Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
+func (k *Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
 	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
 }
 
 // WriteAcknowledgement wraps IBC ICS4Wrapper GetAppVersion function.
-func (k Keeper) GetAppVersion(
+func (k *Keeper) GetAppVersion(
 	ctx sdk.Context,
 	portID,
 	channelID string,
@@ -481,6 +486,6 @@ func (k Keeper) GetAppVersion(
 }
 
 // LookupModuleByChannel wraps ChannelKeeper LookupModuleByChannel function.
-func (k Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
+func (k *Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
 	return k.channelKeeper.LookupModuleByChannel(ctx, portID, channelID)
 }
