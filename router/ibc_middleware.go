@@ -24,7 +24,7 @@ var _ porttypes.Middleware = &IBCMiddleware{}
 // forward keeper and the underlying application.
 type IBCMiddleware struct {
 	app    porttypes.IBCModule
-	keeper keeper.Keeper
+	keeper *keeper.Keeper
 
 	retriesOnTimeout uint8
 	forwardTimeout   time.Duration
@@ -34,7 +34,7 @@ type IBCMiddleware struct {
 // NewIBCMiddleware creates a new IBCMiddleware given the keeper and underlying application.
 func NewIBCMiddleware(
 	app porttypes.IBCModule,
-	k keeper.Keeper,
+	k *keeper.Keeper,
 	retriesOnTimeout uint8,
 	forwardTimeout time.Duration,
 	refundTimeout time.Duration,
