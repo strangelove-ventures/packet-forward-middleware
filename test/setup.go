@@ -155,7 +155,7 @@ func (i initializer) routerKeeper(
 	return routerKeeper
 }
 
-func (i initializer) routerModule(routerKeeper keeper.Keeper) router.AppModule {
+func (i initializer) routerModule(routerKeeper *keeper.Keeper) router.AppModule {
 	return router.NewAppModule(routerKeeper)
 }
 
