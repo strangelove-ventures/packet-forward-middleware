@@ -32,10 +32,9 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	bankKeeperMock := mock.NewMockBankKeeper(ctl)
 	ibcModuleMock := mock.NewMockIBCModule(ctl)
 	ics4WrapperMock := mock.NewMockICS4Wrapper(ctl)
-	portKeeperMock := mock.NewMockPortKeeper(ctl)
 
 	paramsKeeper := initializer.paramsKeeper()
-	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, portKeeperMock, ics4WrapperMock)
+	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, ics4WrapperMock)
 	//routerModule := initializer.routerModule(routerKeeper)
 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
@@ -54,7 +53,6 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 			TransferKeeperMock:     transferKeeperMock,
 			DistributionKeeperMock: distributionKeeperMock,
 			IBCModuleMock:          ibcModuleMock,
-			PortKeeperMock:         portKeeperMock,
 			ICS4WrapperMock:        ics4WrapperMock,
 		},
 
@@ -80,7 +78,6 @@ type testMocks struct {
 	TransferKeeperMock     *mock.MockTransferKeeper
 	DistributionKeeperMock *mock.MockDistributionKeeper
 	IBCModuleMock          *mock.MockIBCModule
-	PortKeeperMock         *mock.MockPortKeeper
 	ICS4WrapperMock        *mock.MockICS4Wrapper
 }
 
@@ -131,7 +128,6 @@ func (i initializer) routerKeeper(
 	channelKeeper types.ChannelKeeper,
 	distributionKeeper types.DistributionKeeper,
 	bankKeeper types.BankKeeper,
-	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
 ) *keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
@@ -146,7 +142,6 @@ func (i initializer) routerKeeper(
 		channelKeeper,
 		distributionKeeper,
 		bankKeeper,
-		portKeeper,
 		ics4Wrapper,
 	)
 
