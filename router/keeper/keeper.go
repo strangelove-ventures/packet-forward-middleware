@@ -24,13 +24,6 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 )
 
-// Middleware must implement types.ChannelKeeper and types.PortKeeper, expected interfaces
-// so that it can wrap IBC channel and port logic for underlying application.
-var (
-	_ types.ChannelKeeper = &Keeper{}
-	_ types.PortKeeper    = &Keeper{}
-)
-
 var (
 	// DefaultTransferPacketTimeoutHeight is the timeout height following IBC defaults
 	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
@@ -53,7 +46,6 @@ type Keeper struct {
 
 	transferKeeper types.TransferKeeper
 	channelKeeper  types.ChannelKeeper
-	portKeeper     types.PortKeeper
 	distrKeeper    types.DistributionKeeper
 	bankKeeper     types.BankKeeper
 	ics4Wrapper    porttypes.ICS4Wrapper
@@ -68,7 +60,6 @@ func NewKeeper(
 	channelKeeper types.ChannelKeeper,
 	distrKeeper types.DistributionKeeper,
 	bankKeeper types.BankKeeper,
-	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
 ) *Keeper {
 	// set KeyTable if it has not already been set
@@ -85,7 +76,6 @@ func NewKeeper(
 		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
 		bankKeeper:     bankKeeper,
-		portKeeper:     portKeeper,
 		ics4Wrapper:    ics4Wrapper,
 	}
 }
@@ -123,7 +113,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
 			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
 
-			return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
 				Data:               inFlightPacket.PacketData,
 				Sequence:           inFlightPacket.RefundSequence,
 				SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -191,7 +181,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -433,27 +423,6 @@ func (k *Keeper) GetAndClearInFlightPacket(
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 	return &inFlightPacket
-}
-
-// BindPort defines a wrapper function for the port Keeper's function in
-// order to expose it to module's InitGenesis function.
-func (k *Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
-	return k.portKeeper.BindPort(ctx, portID)
-}
-
-// GetChannel wraps IBC ChannelKeeper's GetChannel function.
-func (k *Keeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
-	return k.channelKeeper.GetChannel(ctx, portID, channelID)
-}
-
-// GetPacketCommitment wraps IBC ChannelKeeper's GetPacketCommitment function.
-func (k *Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte {
-	return k.channelKeeper.GetPacketCommitment(ctx, portID, channelID, sequence)
-}
-
-// GetNextSequenceSend wraps IBC ChannelKeeper's GetNextSequenceSend function.
-func (k *Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
-	return k.channelKeeper.GetNextSequenceSend(ctx, portID, channelID)
 }
 
 // SendPacket wraps IBC ChannelKeeper's SendPacket function
