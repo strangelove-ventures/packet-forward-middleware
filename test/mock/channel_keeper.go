@@ -10,7 +10,6 @@ import (
 	types "github.com/cosmos/cosmos-sdk/types"
 	types0 "github.com/cosmos/cosmos-sdk/x/capability/types"
 	types1 "github.com/cosmos/ibc-go/v3/modules/core/04-channel/types"
-	exported "github.com/cosmos/ibc-go/v3/modules/core/exported"
 	gomock "github.com/golang/mock/gomock"
 )
 
@@ -95,18 +94,4 @@ func (m *MockChannelKeeper) LookupModuleByChannel(arg0 types.Context, arg1, arg2
 func (mr *MockChannelKeeperMockRecorder) LookupModuleByChannel(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupModuleByChannel", reflect.TypeOf((*MockChannelKeeper)(nil).LookupModuleByChannel), arg0, arg1, arg2)
-}
-
-// WriteAcknowledgement mocks base method.
-func (m *MockChannelKeeper) WriteAcknowledgement(arg0 types.Context, arg1 *types0.Capability, arg2 exported.PacketI, arg3 exported.Acknowledgement) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WriteAcknowledgement", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// WriteAcknowledgement indicates an expected call of WriteAcknowledgement.
-func (mr *MockChannelKeeperMockRecorder) WriteAcknowledgement(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WriteAcknowledgement", reflect.TypeOf((*MockChannelKeeper)(nil).WriteAcknowledgement), arg0, arg1, arg2, arg3)
 }
