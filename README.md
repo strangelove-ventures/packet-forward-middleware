@@ -1,41 +1,110 @@
 # packet-forward-middleware
-Middleware for forwarding IBC packets
+Middleware for forwarding IBC packets.
 
-# About
+Asynchronous acknowledgements are utilized for atomic multi-hop packet flows. The acknowledgement will only be written on the chain where the user initiated the packet flow after the forward/multi-hop sequence has completed (success or failure). This means that a user (i.e. an IBC application) only needs to monitor the chain where the initial transfer was sent for the response of the entire process.
 
-The packet-forward-middleware is a middelware module built for Cosmos blockchains utilizing the IBC protocol. A chain which incorporates the 
+## About
+
+The packet-forward-middleware is an IBC middleware module built for Cosmos blockchains utilizing the IBC protocol. A chain which incorporates the 
 packet-forward-middleware is able to route incoming IBC packets from a source chain to a destination chain. As the Cosmos SDK/IBC become commonplace in the 
 blockchain space more and more zones will come online, these new zones joining are noticing a problem: they need to maintain a large amount of infrastructure 
 (archive nodes and relayers for each counterparty chain) to connect with all the chains in the ecosystem, a number that is continuing to increase quickly. Luckly 
 this problem has been anticipated and IBC has been architected to accomodate multi-hop transactions. However, a packet forwarding/routing feature was not in the 
 initial IBC release. 
 
-# Example 
+## Sequence diagrams
 
-By appending an intermediate address, and the port/channel identifiers for the final destination, clients will be able to outline more than one transfer at a time. 
-The following example shows routing from Terra to Osmosis through the Hub:
-
+### Multi-hop A->B->C->D success
 ```
-// Packet sent from Terra to the hub, note the format of the forwaring info
-// {intermediate_refund_address}|{foward_port}/{forward_channel}:{final_destination_address}
-{
-    "denom": "uluna",
-    "amount": "100000000",
-    "sender": "terra15gwkyepfc6xgca5t5zefzwy42uts8l2m4g40k6",
-    "receiver": "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs|transfer/channel-141:osmo1vzxkv3lxccnttr9rs0002s93sgw72h7gl89vpz",
-}
-
-// When OnRecvPacket on the hub is called, this packet will be modified for fowarding to transfer/channel-141.
-// Notice that all fields execept amount are modified as follows:
-{
-    "denom": "ibc/FEE3FB19682DAAAB02A0328A2B84A80E7DDFE5BA48F7D2C8C30AAC649B8DD519",
-    "amount": "100000000",
-    "sender": "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs",
-    "receiver": "osmo1vzxkv3lxccnttr9rs0002s93sgw72h7gl89vpz",
-}
+        channel-0 channel-1         channel-2 channel-3        channel-4 channel-5
+┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐        ibc       ┌───────┐
+│Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│◄────────────────►│Chain D│
+└───────┘                  └───────┘                  └───────┘                  └───────┘
+     1. transfer 2. recv_packet  3. forward 4. recv_packet  5. forward 6. recv_packet
+         ─────────────────► packet  ─────────────────► packet  ─────────────────►
+     9. ack                 forward   8. ack           forward   7. ack  
+         ◄───────────────── middleware◄─────────────── middleware◄───────────────
 ```
 
-# References
+### Multi-hop A->B->C->D, C->D `recv_packet` error, refund back to A
+```
+        channel-0 channel-1         channel-2 channel-3        channel-4 channel-5
+┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐        ibc       ┌───────┐
+│Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│◄────────────────►│Chain D│
+└───────┘                  └───────┘                  └───────┘                  └───────┘
+     1. transfer 2. recv_packet  3. forward 4. recv_packet  5. forward 6. recv_packet ERR
+         ─────────────────► packet  ─────────────────► packet  ─────────────────►
+         9. ack ERR         forward   8. ack ERR       forward   7. ack ERR
+         ◄───────────────── middleware◄─────────────── middleware◄───────────────
+```
+
+### Forward A->B->C with 1 retry, max timeouts occurs, refund back to A
+```
+        channel-0 channel-1         channel-2 channel-3
+┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐
+│Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│
+└───────┘                  └───────┘                  └───────┘
+     1. transfer 2. recv_packet     3. forward
+         ─────────────────► packet  ─────────────────►
+                            forward   4. timeout
+                            middleware◄───────────────
+                                    5. forward retry
+                                    ─────────────────►
+         7. ack ERR                 6. timeout
+         ◄─────────────────         ◄─────────────────
+```
+
+## Examples
+
+Utilizing the packet `memo` field, instructions can be encoded as JSON for multi-hop sequences.
+
+### Minimal Example - Chain forward A->B->C
+
+- The packet-forward-middleware integrated on Chain B.
+- The packet `memo` is included in `MsgTransfer` by user on Chain A.
+
+```
+{
+  "forward": {
+    "receiver": "chain-c-bech32-address",
+    "port": "transfer",
+    "channel": "channel-123"
+  }
+}
+```
+
+### Full Example - Chain forward A->B->C->D with retry on timeout
+
+- The packet-forward-middleware integrated on Chain B and Chain C.
+- The packet `memo` is included in `MsgTransfer` by user on Chain A.
+- A packet timeout of 10 minutes and 2 retries is set for both forwards. 
+
+In the case of a timeout after 10 minutes for either forward, the packet would be retried up to 2 times, at which case an error ack would be written to issue a refund on the prior chain.
+
+`next` is a string since it could be any `memo` for the next hop, so it must be an escaped JSON string.
+
+```
+{
+  "forward": {
+    "receiver": "chain-c-bech32-address",
+    "port": "transfer",
+    "channel": "channel-123"
+    "timeout": "10m",
+    "retries: 2,
+    "next" : "\{
+      \"forward\":\{
+        \"receiver\":\"chain-d-bech32-address\",
+        \"port\":\"transfer\",
+        \"channel\":\"channel-234\",
+        \"timeout\":\"10m\",
+        \"retries\":2
+      \}
+    \}"
+  }
+}
+```
+
+## References
 
 - https://www.mintscan.io/cosmos/proposals/56
 - https://github.com/cosmos/ibc-go/pull/373
