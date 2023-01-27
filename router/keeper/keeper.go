@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -239,7 +240,14 @@ func (k *Keeper) ForwardTransferPacket(
 
 	// set memo for next transfer with next from this transfer.
 	if metadata.Next != nil {
-		msgTransfer.Memo = *metadata.Next
+		memoBz, err := json.Marshal(metadata.Next)
+		if err != nil {
+			k.Logger(ctx).Error("packetForwardMiddleware error marshaling next as JSON",
+				"error", err,
+			)
+			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+		}
+		msgTransfer.Memo = string(memoBz)
 	}
 
 	k.Logger(ctx).Debug("packetForwardMiddleware ForwardTransferPacket",
@@ -354,7 +362,9 @@ func (k *Keeper) RetryTimeout(
 	}
 
 	if data.Memo != "" {
-		metadata.Next = &data.Memo
+		if err := json.Unmarshal([]byte(data.Memo), metadata.Next); err != nil {
+			return fmt.Errorf("error unmarshaling memo json: %w", err)
+		}
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
