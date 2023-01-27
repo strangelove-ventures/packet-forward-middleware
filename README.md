@@ -81,25 +81,40 @@ Utilizing the packet `memo` field, instructions can be encoded as JSON for multi
 
 In the case of a timeout after 10 minutes for either forward, the packet would be retried up to 2 times, at which case an error ack would be written to issue a refund on the prior chain.
 
-`next` is a string since it could be any `memo` for the next hop, so it must be an escaped JSON string.
+`next` is the `memo` to pass for the next transfer hop. Per `memo` intended usage of a JSON string, it should be either JSON which will be Marshaled retaining key order, or an escaped JSON string which will be passed directly.
 
+`next` as JSON
 ```
 {
   "forward": {
     "receiver": "chain-c-bech32-address",
     "port": "transfer",
-    "channel": "channel-123"
+    "channel": "channel-123",
     "timeout": "10m",
-    "retries: 2,
-    "next" : "\{
-      \"forward\":\{
-        \"receiver\":\"chain-d-bech32-address\",
-        \"port\":\"transfer\",
-        \"channel\":\"channel-234\",
-        \"timeout\":\"10m\",
-        \"retries\":2
-      \}
-    \}"
+    "retries": 2,
+    "next": {
+      "forward": {
+        "receiver": "chain-d-bech32-address",
+        "port": "transfer",
+        "channel":"channel-234",
+        "timeout":"10m",
+        "retries": 2
+      }
+    }
+  }
+}
+```
+
+`next` as escaped JSON string
+```
+{
+  "forward": {
+    "receiver": "chain-c-bech32-address",
+    "port": "transfer",
+    "channel": "channel-123",
+    "timeout": "10m",
+    "retries": 2,
+    "next": "{\"forward\":{\"receiver\":\"chain-d-bech32-address\",\"port\":\"transfer\",\"channel\":\"channel-234\",\"timeout\":\"10m\",\"retries\":2}}"
   }
 }
 ```

@@ -150,10 +150,6 @@ func (i initializer) routerKeeper(
 	return routerKeeper
 }
 
-func (i initializer) routerModule(routerKeeper *keeper.Keeper) router.AppModule {
-	return router.NewAppModule(routerKeeper)
-}
-
 func (i initializer) forwardMiddleware(app porttypes.IBCModule, k *keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
 	return router.NewIBCMiddleware(app, k, retriesOnTimeout, forwardTimeout, refundTimeout)
 }
