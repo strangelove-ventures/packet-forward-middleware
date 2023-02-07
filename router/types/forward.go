@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -62,7 +63,13 @@ func (o *JSONObject) UnmarshalJSON(b []byte) error {
 	if err := o.orderedMap.UnmarshalJSON(b); err != nil {
 		// If ordered map unmarshal fails, this is a primitive value
 		o.obj = false
-		o.primitive = b
+		// Attempt to unmarshal as string, this removes extra JSON escaping
+		var primitiveStr string
+		if err := json.Unmarshal(b, &primitiveStr); err != nil {
+			o.primitive = b
+			return nil
+		}
+		o.primitive = []byte(primitiveStr)
 		return nil
 	}
 	// This is a JSON object, now stored as an ordered map to retain key order.
