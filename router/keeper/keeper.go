@@ -269,7 +269,7 @@ func (k *Keeper) ForwardTransferPacket(
 			"amount", packetCoin.Amount.String(), "denom", packetCoin.Denom,
 			"error", err,
 		)
-		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
+		return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
 
 	// Store the following information in keeper:
