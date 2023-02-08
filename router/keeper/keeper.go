@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
@@ -224,7 +225,7 @@ func (k *Keeper) ForwardTransferPacket(
 			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
 				"error", err,
 			)
-			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
+			return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 
@@ -245,7 +246,7 @@ func (k *Keeper) ForwardTransferPacket(
 			k.Logger(ctx).Error("packetForwardMiddleware error marshaling next as JSON",
 				"error", err,
 			)
-			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+			return errorsmod.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
 		}
 		msgTransfer.Memo = string(memoBz)
 	}
