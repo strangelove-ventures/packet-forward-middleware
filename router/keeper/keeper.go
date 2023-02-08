@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -22,13 +23,6 @@ import (
 	coretypes "github.com/cosmos/ibc-go/v4/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v4/router/types"
 	"github.com/tendermint/tendermint/libs/log"
-)
-
-// Middleware must implement types.ChannelKeeper and types.PortKeeper, expected interfaces
-// so that it can wrap IBC channel and port logic for underlying application.
-var (
-	_ types.ChannelKeeper = Keeper{}
-	_ types.PortKeeper    = Keeper{}
 )
 
 var (
@@ -53,7 +47,6 @@ type Keeper struct {
 
 	transferKeeper types.TransferKeeper
 	channelKeeper  types.ChannelKeeper
-	portKeeper     types.PortKeeper
 	distrKeeper    types.DistributionKeeper
 	bankKeeper     types.BankKeeper
 	ics4Wrapper    porttypes.ICS4Wrapper
@@ -68,15 +61,14 @@ func NewKeeper(
 	channelKeeper types.ChannelKeeper,
 	distrKeeper types.DistributionKeeper,
 	bankKeeper types.BankKeeper,
-	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
-) Keeper {
+) *Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
 		paramSpace = paramSpace.WithKeyTable(types.ParamKeyTable())
 	}
 
-	return Keeper{
+	return &Keeper{
 		cdc:        cdc,
 		storeKey:   key,
 		paramSpace: paramSpace,
@@ -85,17 +77,21 @@ func NewKeeper(
 		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
 		bankKeeper:     bankKeeper,
-		portKeeper:     portKeeper,
 		ics4Wrapper:    ics4Wrapper,
 	}
 }
 
+// SetTransferKeeper sets the transferKeeper
+func (k *Keeper) SetTransferKeeper(transferKeeper types.TransferKeeper) {
+	k.transferKeeper = transferKeeper
+}
+
 // Logger returns a module-specific logger.
-func (k Keeper) Logger(ctx sdk.Context) log.Logger {
+func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) WriteAcknowledgementForForwardedPacket(
+func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 	data transfertypes.FungibleTokenPacketData,
@@ -118,7 +114,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
 			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
 
-			return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
 				Data:               inFlightPacket.PacketData,
 				Sequence:           inFlightPacket.RefundSequence,
 				SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -186,7 +182,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -198,7 +194,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	}, ack)
 }
 
-func (k Keeper) ForwardTransferPacket(
+func (k *Keeper) ForwardTransferPacket(
 	ctx sdk.Context,
 	inFlightPacket *types.InFlightPacket,
 	srcPacket channeltypes.Packet,
@@ -244,7 +240,14 @@ func (k Keeper) ForwardTransferPacket(
 
 	// set memo for next transfer with next from this transfer.
 	if metadata.Next != nil {
-		msgTransfer.Memo = *metadata.Next
+		memoBz, err := json.Marshal(metadata.Next)
+		if err != nil {
+			k.Logger(ctx).Error("packetForwardMiddleware error marshaling next as JSON",
+				"error", err,
+			)
+			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+		}
+		msgTransfer.Memo = string(memoBz)
 	}
 
 	k.Logger(ctx).Debug("packetForwardMiddleware ForwardTransferPacket",
@@ -315,7 +318,7 @@ func (k Keeper) ForwardTransferPacket(
 }
 
 // TimeoutShouldRetry returns inFlightPacket and no error if retry should be attempted. Error is returned if IBC refund should occur.
-func (k Keeper) TimeoutShouldRetry(
+func (k *Keeper) TimeoutShouldRetry(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 ) (*types.InFlightPacket, error) {
@@ -345,7 +348,7 @@ func (k Keeper) TimeoutShouldRetry(
 	return &inFlightPacket, nil
 }
 
-func (k Keeper) RetryTimeout(
+func (k *Keeper) RetryTimeout(
 	ctx sdk.Context,
 	channel, port string,
 	data transfertypes.FungibleTokenPacketData,
@@ -359,7 +362,9 @@ func (k Keeper) RetryTimeout(
 	}
 
 	if data.Memo != "" {
-		metadata.Next = &data.Memo
+		if err := json.Unmarshal([]byte(data.Memo), metadata.Next); err != nil {
+			return fmt.Errorf("error unmarshaling memo json: %w", err)
+		}
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -394,7 +399,7 @@ func (k Keeper) RetryTimeout(
 	)
 }
 
-func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
+func (k *Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
@@ -407,7 +412,7 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 }
 
 // GetAndClearInFlightPacket will fetch an InFlightPacket from the store, remove it if it exists, and return it.
-func (k Keeper) GetAndClearInFlightPacket(
+func (k *Keeper) GetAndClearInFlightPacket(
 	ctx sdk.Context,
 	channel string,
 	port string,
@@ -430,39 +435,18 @@ func (k Keeper) GetAndClearInFlightPacket(
 	return &inFlightPacket
 }
 
-// BindPort defines a wrapper function for the port Keeper's function in
-// order to expose it to module's InitGenesis function.
-func (k Keeper) BindPort(ctx sdk.Context, portID string) *capabilitytypes.Capability {
-	return k.portKeeper.BindPort(ctx, portID)
-}
-
-// GetChannel wraps IBC ChannelKeeper's GetChannel function.
-func (k Keeper) GetChannel(ctx sdk.Context, portID, channelID string) (channeltypes.Channel, bool) {
-	return k.channelKeeper.GetChannel(ctx, portID, channelID)
-}
-
-// GetPacketCommitment wraps IBC ChannelKeeper's GetPacketCommitment function.
-func (k Keeper) GetPacketCommitment(ctx sdk.Context, portID, channelID string, sequence uint64) []byte {
-	return k.channelKeeper.GetPacketCommitment(ctx, portID, channelID, sequence)
-}
-
-// GetNextSequenceSend wraps IBC ChannelKeeper's GetNextSequenceSend function.
-func (k Keeper) GetNextSequenceSend(ctx sdk.Context, portID, channelID string) (uint64, bool) {
-	return k.channelKeeper.GetNextSequenceSend(ctx, portID, channelID)
-}
-
 // SendPacket wraps IBC ChannelKeeper's SendPacket function
-func (k Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI) error {
+func (k *Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI) error {
 	return k.ics4Wrapper.SendPacket(ctx, chanCap, packet)
 }
 
 // WriteAcknowledgement wraps IBC ChannelKeeper's WriteAcknowledgement function.
 // ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
-func (k Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
+func (k *Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
 	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
 }
 
-func (k Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
+func (k *Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
 	return k.channelKeeper.LookupModuleByChannel(ctx, portID, channelID)
 }
 

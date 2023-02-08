@@ -32,11 +32,11 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 	bankKeeperMock := mock.NewMockBankKeeper(ctl)
 	ibcModuleMock := mock.NewMockIBCModule(ctl)
 	ics4WrapperMock := mock.NewMockICS4Wrapper(ctl)
-	portKeeperMock := mock.NewMockPortKeeper(ctl)
 
 	paramsKeeper := initializer.paramsKeeper()
-	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, portKeeperMock, ics4WrapperMock)
-
+	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, ics4WrapperMock)
+	//routerModule := initializer.routerModule(routerKeeper)
+ 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
 
 	routerKeeper.SetParams(initializer.Ctx, types.DefaultParams())
@@ -46,7 +46,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 
 		Keepers: &testKeepers{
 			ParamsKeeper: &paramsKeeper,
-			RouterKeeper: &routerKeeper,
+			RouterKeeper: routerKeeper,
 		},
 
 		Mocks: &testMocks{
@@ -54,7 +54,6 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 			ChannelKeeperMock:      channelKeeperMock,
 			DistributionKeeperMock: distributionKeeperMock,
 			IBCModuleMock:          ibcModuleMock,
-			PortKeeperMock:         portKeeperMock,
 			ICS4WrapperMock:        ics4WrapperMock,
 		},
 
@@ -81,7 +80,6 @@ type testMocks struct {
 	ChannelKeeperMock      *mock.MockChannelKeeper
 	DistributionKeeperMock *mock.MockDistributionKeeper
 	IBCModuleMock          *mock.MockIBCModule
-	PortKeeperMock         *mock.MockPortKeeper
 	ICS4WrapperMock        *mock.MockICS4Wrapper
 }
 
@@ -132,9 +130,8 @@ func (i initializer) routerKeeper(
 	channelKeeper types.ChannelKeeper,
 	distributionKeeper types.DistributionKeeper,
 	bankKeeper types.BankKeeper,
-	portKeeper types.PortKeeper,
 	ics4Wrapper porttypes.ICS4Wrapper,
-) keeper.Keeper {
+) *keeper.Keeper {
 	storeKey := sdk.NewKVStoreKey(types.StoreKey)
 	i.StateStore.MountStoreWithDB(storeKey, storetypes.StoreTypeIAVL, i.DB)
 
@@ -147,13 +144,13 @@ func (i initializer) routerKeeper(
 		channelKeeper,
 		distributionKeeper,
 		bankKeeper,
-		portKeeper,
 		ics4Wrapper,
 	)
 
 	return routerKeeper
 }
 
-func (i initializer) forwardMiddleware(app porttypes.IBCModule, k keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
+
+func (i initializer) forwardMiddleware(app porttypes.IBCModule, k *keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
 	return router.NewIBCMiddleware(app, k, retriesOnTimeout, forwardTimeout, refundTimeout)
 }
