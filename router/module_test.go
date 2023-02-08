@@ -379,7 +379,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer1,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
 			Return(acknowledgement),
@@ -387,7 +387,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer2,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
 			Return(nil),
