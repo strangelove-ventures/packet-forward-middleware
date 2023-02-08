@@ -1,91 +1,74 @@
 package keeper
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/armon/go-metrics"
-	"github.com/tendermint/tendermint/libs/log"
-
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v5/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v5/modules/core/05-port/types"
 	host "github.com/cosmos/ibc-go/v5/modules/core/24-host"
+	ibcexported "github.com/cosmos/ibc-go/v5/modules/core/exported"
 	coretypes "github.com/cosmos/ibc-go/v5/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v5/router/types"
+	"github.com/tendermint/tendermint/libs/log"
 )
 
-// Keeper defines the IBC fungible transfer keeper
+var (
+	// DefaultTransferPacketTimeoutHeight is the timeout height following IBC defaults
+	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
+		RevisionNumber: 0,
+		RevisionHeight: 0,
+	}
+
+	// DefaultForwardTransferPacketTimeoutTimestamp is the timeout timestamp following IBC defaults
+	DefaultForwardTransferPacketTimeoutTimestamp = time.Duration(transfertypes.DefaultRelativePacketTimeoutTimestamp) * time.Nanosecond
+
+	// DefaultRefundTransferPacketTimeoutTimestamp is a 28-day timeout for refund packets since funds are stuck in router module otherwise.
+	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
+)
+
+// Keeper defines the packet forward middleware keeper
 type Keeper struct {
-	storeKey   storetypes.StoreKey
 	cdc        codec.BinaryCodec
+	storeKey   storetypes.StoreKey
 	paramSpace paramtypes.Subspace
 
 	transferKeeper types.TransferKeeper
 	channelKeeper  types.ChannelKeeper
 	distrKeeper    types.DistributionKeeper
 	bankKeeper     types.BankKeeper
+	ics4Wrapper    porttypes.ICS4Wrapper
 }
 
-type PacketMetadata struct {
-	Forward *ForwardMetadata `json:"forward"`
-}
-
-type ForwardMetadata struct {
-	Receiver string        `json:"receiver,omitempty"`
-	Port     string        `json:"port,omitempty"`
-	Channel  string        `json:"channel,omitempty"`
-	Timeout  time.Duration `json:"timeout,omitempty"`
-	Retries  *uint8        `json:"retries,omitempty"`
-	Next     *string       `json:"next,omitempty"`
-}
-
-func (m *ForwardMetadata) Validate() error {
-	if m.Receiver == "" {
-		return fmt.Errorf("failed to validate forward metadata. receiver cannot be empty")
-	}
-	if err := host.PortIdentifierValidator(m.Port); err != nil {
-		return fmt.Errorf("failed to validate forward metadata: %w", err)
-	}
-	if err := host.ChannelIdentifierValidator(m.Channel); err != nil {
-		return fmt.Errorf("failed to validate forward metadata: %w", err)
-	}
-
-	return nil
-}
-
-var (
-	// Timeout height following IBC defaults
-	DefaultTransferPacketTimeoutHeight = clienttypes.Height{
-		RevisionNumber: 0,
-		RevisionHeight: 0,
-	}
-	// Timeout timestamp following IBC defaults
-	DefaultForwardTransferPacketTimeoutTimestamp = time.Duration(transfertypes.DefaultRelativePacketTimeoutTimestamp) * time.Nanosecond
-
-	// 28 day timeout for refund packets since funds are stuck in router module otherwise.
-	DefaultRefundTransferPacketTimeoutTimestamp = 28 * 24 * time.Hour
-)
-
-// NewKeeper creates a new 29-fee Keeper instance
+// NewKeeper creates a new forward Keeper instance
 func NewKeeper(
-	cdc codec.BinaryCodec, key storetypes.StoreKey, paramSpace paramtypes.Subspace,
-	transferKeeper types.TransferKeeper, channelKeeper types.ChannelKeeper,
-	distrKeeper types.DistributionKeeper, bankKeeper types.BankKeeper,
-) Keeper {
+	cdc codec.BinaryCodec,
+	key storetypes.StoreKey,
+	paramSpace paramtypes.Subspace,
+	transferKeeper types.TransferKeeper,
+	channelKeeper types.ChannelKeeper,
+	distrKeeper types.DistributionKeeper,
+	bankKeeper types.BankKeeper,
+	ics4Wrapper porttypes.ICS4Wrapper,
+) *Keeper {
 	// set KeyTable if it has not already been set
 	if !paramSpace.HasKeyTable() {
 		paramSpace = paramSpace.WithKeyTable(types.ParamKeyTable())
 	}
 
-	return Keeper{
+	return &Keeper{
 		cdc:        cdc,
 		storeKey:   key,
 		paramSpace: paramSpace,
@@ -94,15 +77,21 @@ func NewKeeper(
 		channelKeeper:  channelKeeper,
 		distrKeeper:    distrKeeper,
 		bankKeeper:     bankKeeper,
+		ics4Wrapper:    ics4Wrapper,
 	}
 }
 
+// SetTransferKeeper sets the transferKeeper
+func (k *Keeper) SetTransferKeeper(transferKeeper types.TransferKeeper) {
+	k.transferKeeper = transferKeeper
+}
+
 // Logger returns a module-specific logger.
-func (k Keeper) Logger(ctx sdk.Context) log.Logger {
+func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
 }
 
-func (k Keeper) WriteAcknowledgementForForwardedPacket(
+func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 	data transfertypes.FungibleTokenPacketData,
@@ -119,6 +108,24 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	// On an ack error or timeout on a forwarded packet, the funds in the escrow account
 	// should be moved to the other escrow account on the other side or burned.
 	if !ack.Success() {
+		// If this packet is non-refundable due to some action that took place between the initial ibc transfer and the forward
+		// we write a successful ack containing details on what happened regardless of ack error or timeout
+		if inFlightPacket.Nonrefundable {
+			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
+			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
+
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+				Data:               inFlightPacket.PacketData,
+				Sequence:           inFlightPacket.RefundSequence,
+				SourcePort:         inFlightPacket.PacketSrcPortId,
+				SourceChannel:      inFlightPacket.PacketSrcChannelId,
+				DestinationPort:    inFlightPacket.RefundPortId,
+				DestinationChannel: inFlightPacket.RefundChannelId,
+				TimeoutHeight:      clienttypes.MustParseHeight(inFlightPacket.PacketTimeoutHeight),
+				TimeoutTimestamp:   inFlightPacket.PacketTimeoutTimestamp,
+			}, newAck)
+		}
+
 		fullDenomPath := data.Denom
 
 		// deconstruct the token denomination into the denomination trace info
@@ -175,7 +182,7 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.channelKeeper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -187,17 +194,18 @@ func (k Keeper) WriteAcknowledgementForForwardedPacket(
 	}, ack)
 }
 
-func (k Keeper) ForwardTransferPacket(
+func (k *Keeper) ForwardTransferPacket(
 	ctx sdk.Context,
 	inFlightPacket *types.InFlightPacket,
 	srcPacket channeltypes.Packet,
 	srcPacketSender string,
 	receiver string,
-	metadata *ForwardMetadata,
+	metadata *types.ForwardMetadata,
 	token sdk.Coin,
 	maxRetries uint8,
 	timeout time.Duration,
 	labels []metrics.Label,
+	nonrefundable bool,
 ) error {
 	var err error
 	feeAmount := sdk.NewDecFromInt(token.Amount).Mul(k.GetFeePercentage(ctx)).RoundInt()
@@ -232,7 +240,14 @@ func (k Keeper) ForwardTransferPacket(
 
 	// set memo for next transfer with next from this transfer.
 	if metadata.Next != nil {
-		msgTransfer.Memo = *metadata.Next
+		memoBz, err := json.Marshal(metadata.Next)
+		if err != nil {
+			k.Logger(ctx).Error("packetForwardMiddleware error marshaling next as JSON",
+				"error", err,
+			)
+			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+		}
+		msgTransfer.Memo = string(memoBz)
 	}
 
 	k.Logger(ctx).Debug("packetForwardMiddleware ForwardTransferPacket",
@@ -275,6 +290,7 @@ func (k Keeper) ForwardTransferPacket(
 
 			RetriesRemaining: int32(maxRetries),
 			Timeout:          uint64(timeout.Nanoseconds()),
+			Nonrefundable:    nonrefundable,
 		}
 	} else {
 		inFlightPacket.RetriesRemaining--
@@ -302,7 +318,7 @@ func (k Keeper) ForwardTransferPacket(
 }
 
 // TimeoutShouldRetry returns inFlightPacket and no error if retry should be attempted. Error is returned if IBC refund should occur.
-func (k Keeper) TimeoutShouldRetry(
+func (k *Keeper) TimeoutShouldRetry(
 	ctx sdk.Context,
 	packet channeltypes.Packet,
 ) (*types.InFlightPacket, error) {
@@ -332,21 +348,23 @@ func (k Keeper) TimeoutShouldRetry(
 	return &inFlightPacket, nil
 }
 
-func (k Keeper) RetryTimeout(
+func (k *Keeper) RetryTimeout(
 	ctx sdk.Context,
 	channel, port string,
 	data transfertypes.FungibleTokenPacketData,
 	inFlightPacket *types.InFlightPacket,
 ) error {
 	// send transfer again
-	metadata := &ForwardMetadata{
+	metadata := &types.ForwardMetadata{
 		Receiver: data.Receiver,
 		Channel:  channel,
 		Port:     port,
 	}
 
 	if data.Memo != "" {
-		metadata.Next = &data.Memo
+		if err := json.Unmarshal([]byte(data.Memo), metadata.Next); err != nil {
+			return fmt.Errorf("error unmarshaling memo json: %w", err)
+		}
 	}
 
 	amount, ok := sdk.NewIntFromString(data.Amount)
@@ -377,10 +395,11 @@ func (k Keeper) RetryTimeout(
 		uint8(inFlightPacket.RetriesRemaining),
 		time.Duration(inFlightPacket.Timeout)*time.Nanosecond,
 		nil,
+		inFlightPacket.Nonrefundable,
 	)
 }
 
-func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
+func (k *Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet) {
 	store := ctx.KVStore(k.storeKey)
 	key := types.RefundPacketKey(packet.SourceChannel, packet.SourcePort, packet.Sequence)
 	if !store.Has(key) {
@@ -393,7 +412,7 @@ func (k Keeper) RemoveInFlightPacket(ctx sdk.Context, packet channeltypes.Packet
 }
 
 // GetAndClearInFlightPacket will fetch an InFlightPacket from the store, remove it if it exists, and return it.
-func (k Keeper) GetAndClearInFlightPacket(
+func (k *Keeper) GetAndClearInFlightPacket(
 	ctx sdk.Context,
 	channel string,
 	port string,
@@ -414,4 +433,29 @@ func (k Keeper) GetAndClearInFlightPacket(
 	var inFlightPacket types.InFlightPacket
 	k.cdc.MustUnmarshal(bz, &inFlightPacket)
 	return &inFlightPacket
+}
+
+// SendPacket wraps IBC ChannelKeeper's SendPacket function
+func (k *Keeper) SendPacket(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI) error {
+	return k.ics4Wrapper.SendPacket(ctx, chanCap, packet)
+}
+
+// WriteAcknowledgement wraps IBC ICS4Wrapper WriteAcknowledgement function.
+// ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
+func (k *Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
+}
+
+// WriteAcknowledgement wraps IBC ICS4Wrapper GetAppVersion function.
+func (k *Keeper) GetAppVersion(
+	ctx sdk.Context,
+	portID,
+	channelID string,
+) (string, bool) {
+	return k.ics4Wrapper.GetAppVersion(ctx, portID, channelID)
+}
+
+// LookupModuleByChannel wraps ChannelKeeper LookupModuleByChannel function.
+func (k *Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
+	return k.channelKeeper.LookupModuleByChannel(ctx, portID, channelID)
 }
