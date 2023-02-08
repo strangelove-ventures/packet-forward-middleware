@@ -102,7 +102,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	// Lookup module by channel capability
 	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
-		return sdkerrors.Wrap(err, "could not retrieve module from port-id")
+		return errorsmod.Wrap(err, "could not retrieve module from port-id")
 	}
 
 	// for forwarded packets, the funds were moved into an escrow account if the denom originated on this chain.
