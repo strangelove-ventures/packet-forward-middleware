@@ -35,7 +35,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 
 	paramsKeeper := initializer.paramsKeeper()
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, ics4WrapperMock)
-	//routerModule := initializer.routerModule(routerKeeper)
+
  
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
 
@@ -149,7 +149,6 @@ func (i initializer) routerKeeper(
 
 	return routerKeeper
 }
-
 
 func (i initializer) forwardMiddleware(app porttypes.IBCModule, k *keeper.Keeper, retriesOnTimeout uint8, forwardTimeout time.Duration, refundTimeout time.Duration) router.IBCMiddleware {
 	return router.NewIBCMiddleware(app, k, retriesOnTimeout, forwardTimeout, refundTimeout)

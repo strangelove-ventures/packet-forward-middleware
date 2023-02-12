@@ -182,7 +182,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 		channel  = "channel-0"
 	)
 
-  denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
+	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
 	senderAccAddr := test.AccAddress()
 	testCoin := sdk.NewCoin(denom, sdk.NewInt(100))
 	packetOrig := transferPacket(t, hostAddr, &types.PacketMetadata{
@@ -380,7 +380,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer1,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
 			Return(acknowledgement),
@@ -388,7 +388,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer2,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
 			Return(nil),
