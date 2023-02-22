@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
+	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
 	"github.com/iancoleman/orderedmap"
 )
 
