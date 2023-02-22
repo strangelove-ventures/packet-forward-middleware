@@ -1,4 +1,4 @@
-go 1.18
+go 1.19
 
 module github.com/strangelove-ventures/packet-forward-middleware/v7
 
