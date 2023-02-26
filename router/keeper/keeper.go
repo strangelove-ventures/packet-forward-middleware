@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/armon/go-metrics"
+	"github.com/cometbft/cometbft/libs/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -21,7 +22,6 @@ import (
 	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
 	coretypes "github.com/cosmos/ibc-go/v7/modules/core/types"
 	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
-	"github.com/tendermint/tendermint/libs/log"
 )
 
 var (
@@ -382,7 +382,7 @@ func (k *Keeper) RetryTimeout(
 
 	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
 
-	var token = sdk.NewCoin(denom, amount)
+	token := sdk.NewCoin(denom, amount)
 
 	// srcPacket and srcPacketSender are empty because inFlightPacket is non-nil.
 	return k.ForwardTransferPacket(
