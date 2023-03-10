@@ -4,18 +4,18 @@ module github.com/strangelove-ventures/packet-forward-middleware/v7
 
 require (
 	github.com/armon/go-metrics v0.4.1
-	github.com/cometbft/cometbft v0.37.0-alpha.3
+	github.com/cometbft/cometbft v0.37.0
 	github.com/cometbft/cometbft-db v0.7.0
-	github.com/cosmos/cosmos-sdk v0.47.0-rc2.0.20230224204036-a6adb0821462
+	github.com/cosmos/cosmos-sdk v0.47.0-rc3
 	github.com/cosmos/gogoproto v1.4.6
-	github.com/cosmos/ibc-go/v7 v7.0.0-20230224085028-0a79e38d9199
+	github.com/cosmos/ibc-go/v7 v7.0.0-rc1
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/mux v1.8.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/iancoleman/orderedmap v0.2.0
 	github.com/spf13/cobra v1.6.1
-	github.com/stretchr/testify v1.8.1
+	github.com/stretchr/testify v1.8.2
 	google.golang.org/genproto v0.0.0-20230216225411-c8e22ba71e44
 	google.golang.org/grpc v1.53.0
 )
