@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/armon/go-metrics"
+	"github.com/cometbft/cometbft/libs/log"
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
@@ -14,15 +15,13 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	clienttypes "github.com/cosmos/ibc-go/v6/modules/core/02-client/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
-	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
-	host "github.com/cosmos/ibc-go/v6/modules/core/24-host"
-	ibcexported "github.com/cosmos/ibc-go/v6/modules/core/exported"
-	coretypes "github.com/cosmos/ibc-go/v6/modules/core/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
-	"github.com/tendermint/tendermint/libs/log"
+	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
+	ibcexported "github.com/cosmos/ibc-go/v7/modules/core/exported"
+	coretypes "github.com/cosmos/ibc-go/v7/modules/core/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
 )
 
 var (
@@ -87,7 +86,7 @@ func (k *Keeper) SetTransferKeeper(transferKeeper types.TransferKeeper) {
 
 // Logger returns a module-specific logger.
 func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
-	return ctx.Logger().With("module", "x/"+host.ModuleName+"-"+types.ModuleName)
+	return ctx.Logger().With("module", "x/"+ibcexported.ModuleName+"-"+types.ModuleName)
 }
 
 func (k *Keeper) WriteAcknowledgementForForwardedPacket(
@@ -383,7 +382,7 @@ func (k *Keeper) RetryTimeout(
 
 	denom := transfertypes.ParseDenomTrace(data.Denom).IBCDenom()
 
-	var token = sdk.NewCoin(denom, amount)
+	token := sdk.NewCoin(denom, amount)
 
 	// srcPacket and srcPacketSender are empty because inFlightPacket is non-nil.
 	return k.ForwardTransferPacket(

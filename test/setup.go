@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	tmdb "github.com/cometbft/cometbft-db"
+	"github.com/cometbft/cometbft/libs/log"
+	tmproto "github.com/cometbft/cometbft/proto/tendermint/types"
 	"github.com/cosmos/cosmos-sdk/codec"
 	cdctypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/store"
@@ -11,16 +14,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramskeeper "github.com/cosmos/cosmos-sdk/x/params/keeper"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
-	porttypes "github.com/cosmos/ibc-go/v6/modules/core/05-port/types"
+	porttypes "github.com/cosmos/ibc-go/v7/modules/core/05-port/types"
 	"github.com/golang/mock/gomock"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/test/mock"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/test/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/tendermint/tendermint/libs/log"
-	tmproto "github.com/tendermint/tendermint/proto/tendermint/types"
-	tmdb "github.com/tendermint/tm-db"
 )
 
 func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
@@ -35,7 +35,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 
 	paramsKeeper := initializer.paramsKeeper()
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, ics4WrapperMock)
-	//routerModule := initializer.routerModule(routerKeeper)
+	// routerModule := initializer.routerModule(routerKeeper)
 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
 

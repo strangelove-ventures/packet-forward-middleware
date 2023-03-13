@@ -7,7 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/version"
 	"github.com/spf13/cobra"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
 )
 
 // GetQueryCmd returns the query commands for router

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
 	"github.com/stretchr/testify/require"
 )
 

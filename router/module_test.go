@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	apptypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	transfertypes "github.com/cosmos/ibc-go/v6/modules/apps/transfer/types"
-	channeltypes "github.com/cosmos/ibc-go/v6/modules/core/04-channel/types"
+	apptypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
+	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
 	"github.com/iancoleman/orderedmap"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/keeper"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/router/types"
-	"github.com/strangelove-ventures/packet-forward-middleware/v6/test"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/keeper"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/router/types"
+	"github.com/strangelove-ventures/packet-forward-middleware/v7/test"
 	"github.com/stretchr/testify/require"
 )
 
