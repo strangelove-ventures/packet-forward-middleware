@@ -24,6 +24,7 @@ import (
 )
 
 func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
+	t.Helper()
 	initializer := newInitializer()
 
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)

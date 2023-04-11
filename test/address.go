@@ -16,6 +16,7 @@ func AccAddress() sdk.AccAddress {
 }
 
 func AccAddressFromBech32(t *testing.T, addr string) sdk.AccAddress {
+	t.Helper()
 	a, err := sdk.AccAddressFromBech32(addr)
 	require.NoError(t, err)
 

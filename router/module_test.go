@@ -36,6 +36,7 @@ func emptyPacket() channeltypes.Packet {
 }
 
 func transferPacket(t *testing.T, receiver string, metadata any) channeltypes.Packet {
+	t.Helper()
 	transferPacket := transfertypes.FungibleTokenPacketData{
 		Denom:    testDenom,
 		Amount:   testAmount,
