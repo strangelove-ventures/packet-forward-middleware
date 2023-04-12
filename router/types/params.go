@@ -49,7 +49,6 @@ func validateFeePercentage(i interface{}) error {
 	}
 	if v.IsNegative() {
 		return fmt.Errorf("invalid fee percentage. expected not negative, got %d", v.RoundInt64())
-
 	}
 	if !(v.LTE(sdk.OneDec())) {
 		return fmt.Errorf("invalid fee percentage. expected less than one 1 got %d", v.RoundInt64())
