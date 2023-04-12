@@ -23,7 +23,7 @@ import (
 	tmdb "github.com/tendermint/tm-db"
 )
 
-func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
+func NewTestSetup(t *testing.T, ctl *gomock.Controller) *Setup {
 	initializer := newInitializer()
 
 	transferKeeperMock := mock.NewMockTransferKeeper(ctl)
@@ -35,13 +35,12 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 
 	paramsKeeper := initializer.paramsKeeper()
 	routerKeeper := initializer.routerKeeper(paramsKeeper, transferKeeperMock, channelKeeperMock, distributionKeeperMock, bankKeeperMock, ics4WrapperMock)
-	//routerModule := initializer.routerModule(routerKeeper)
 
 	require.NoError(t, initializer.StateStore.LoadLatestVersion())
 
 	routerKeeper.SetParams(initializer.Ctx, types.DefaultParams())
 
-	return &TestSetup{
+	return &Setup{
 		Initializer: initializer,
 
 		Keepers: &testKeepers{
@@ -61,7 +60,7 @@ func NewTestSetup(t *testing.T, ctl *gomock.Controller) *TestSetup {
 	}
 }
 
-type TestSetup struct {
+type Setup struct {
 	Initializer initializer
 
 	Keepers *testKeepers

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	apptypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
 	transfertypes "github.com/cosmos/ibc-go/v5/modules/apps/transfer/types"
 	channeltypes "github.com/cosmos/ibc-go/v5/modules/core/04-channel/types"
 	"github.com/golang/mock/gomock"
@@ -213,7 +212,7 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
 			),
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
 			Return(nil),
@@ -285,7 +284,7 @@ func TestOnRecvPacket_ForwardWithFee(t *testing.T) {
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
 			),
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
 			Return(nil),
@@ -380,7 +379,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer1,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
 			Return(acknowledgement),
@@ -388,7 +387,7 @@ func TestOnRecvPacket_ForwardMultihopStringNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer2,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
 			Return(nil),
@@ -497,7 +496,7 @@ func TestOnRecvPacket_ForwardMultihopJSONNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer1,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet2, senderAccAddr2).
 			Return(acknowledgement),
@@ -505,7 +504,7 @@ func TestOnRecvPacket_ForwardMultihopJSONNext(t *testing.T) {
 		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
 			sdk.WrapSDKContext(ctx),
 			msgTransfer2,
-		).Return(&apptypes.MsgTransferResponse{Sequence: 0}, nil),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
 		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr2).
 			Return(nil),
