@@ -17,8 +17,9 @@ import (
 )
 
 var (
-	testDenom  = "uatom"
-	testAmount = "100"
+	testDenom     = "uatom"
+	testAmount    = "100"
+	testAmount256 = "100000000000000000000"
 
 	testSourcePort         = "transfer"
 	testSourceChannel      = "channel-10"
@@ -39,6 +40,36 @@ func transferPacket(t *testing.T, receiver string, metadata any) channeltypes.Pa
 	transferPacket := transfertypes.FungibleTokenPacketData{
 		Denom:    testDenom,
 		Amount:   testAmount,
+		Receiver: receiver,
+	}
+
+	if metadata != nil {
+		if mStr, ok := metadata.(string); ok {
+			transferPacket.Memo = mStr
+		} else {
+			memo, err := json.Marshal(metadata)
+			require.NoError(t, err)
+			transferPacket.Memo = string(memo)
+		}
+	}
+
+	transferData, err := transfertypes.ModuleCdc.MarshalJSON(&transferPacket)
+	require.NoError(t, err)
+
+	return channeltypes.Packet{
+		SourcePort:         testSourcePort,
+		SourceChannel:      testSourceChannel,
+		DestinationPort:    testDestinationPort,
+		DestinationChannel: testDestinationChannel,
+		Data:               transferData,
+	}
+}
+
+func transferPacket256(t *testing.T, receiver string, metadata any) channeltypes.Packet {
+	t.Helper()
+	transferPacket := transfertypes.FungibleTokenPacketData{
+		Denom:    testDenom,
+		Amount:   testAmount256,
 		Receiver: receiver,
 	}
 
@@ -211,6 +242,73 @@ func TestOnRecvPacket_ForwardNoFee(t *testing.T) {
 				destAddr,
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+			),
+		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
+
+		setup.Mocks.IBCModuleMock.EXPECT().OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr).
+			Return(nil),
+	)
+
+	// chain B with router module receives packet and forwards. ack should be nil so that it is not written yet.
+	ack := forwardMiddleware.OnRecvPacket(ctx, packetOrig, senderAccAddr)
+	require.Nil(t, ack)
+
+	// ack returned from chain C
+	err = forwardMiddleware.OnAcknowledgementPacket(ctx, packetFwd, successAck, senderAccAddr)
+	require.NoError(t, err)
+}
+
+func TestOnRecvPacket_ForwardAmountInt256(t *testing.T) {
+	var err error
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	setup := test.NewTestSetup(t, ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	forwardMiddleware := setup.ForwardMiddleware
+
+	// Test data
+	const (
+		hostAddr = "cosmos1vzxkv3lxccnttr9rs0002s93sgw72h7ghukuhs"
+		destAddr = "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k"
+		port     = "transfer"
+		channel  = "channel-0"
+	)
+	denom := makeIBCDenom(testDestinationPort, testDestinationChannel, testDenom)
+	senderAccAddr := test.AccAddress()
+
+	amount256, ok := sdk.NewIntFromString(testAmount256)
+	require.True(t, ok)
+
+	testCoin := sdk.NewCoin(denom, amount256)
+	packetOrig := transferPacket256(t, hostAddr, &types.PacketMetadata{
+		Forward: &types.ForwardMetadata{
+			Receiver: destAddr,
+			Port:     port,
+			Channel:  channel,
+		},
+	})
+	packetFwd := transferPacket256(t, destAddr, nil)
+
+	acknowledgement := channeltypes.NewResultAcknowledgement([]byte("test"))
+	successAck := cdc.MustMarshalJSON(&acknowledgement)
+
+	// Expected mocks
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packetOrig, senderAccAddr).
+			Return(acknowledgement),
+
+		setup.Mocks.TransferKeeperMock.EXPECT().Transfer(
+			sdk.WrapSDKContext(ctx),
+			transfertypes.NewMsgTransfer(
+				port,
+				channel,
+				testCoin,
+				hostAddr,
+				destAddr,
+				keeper.DefaultTransferPacketTimeoutHeight,
+				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
+				"",
 			),
 		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
