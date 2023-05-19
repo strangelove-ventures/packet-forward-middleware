@@ -302,11 +302,13 @@ func (k *Keeper) ForwardTransferPacket(
 	store.Set(key, bz)
 
 	defer func() {
-		telemetry.SetGaugeWithLabels(
-			[]string{"tx", "msg", "ibc", "transfer"},
-			float32(token.Amount.Int64()),
-			[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
-		)
+		if token.Amount.IsInt64() {
+			telemetry.SetGaugeWithLabels(
+				[]string{"tx", "msg", "ibc", "transfer"},
+				float32(token.Amount.Int64()),
+				[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
+			)
+		}
 
 		telemetry.IncrCounterWithLabels(
 			[]string{"ibc", types.ModuleName, "send"},
