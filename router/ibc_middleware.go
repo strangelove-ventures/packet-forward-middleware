@@ -202,10 +202,9 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	token := sdk.NewCoin(denomOnThisChain, amountInt)
 
-	var timeout time.Duration
-	if metadata.Timeout.Nanoseconds() > 0 {
-		timeout = metadata.Timeout
-	} else {
+	timeout := time.Duration(metadata.Timeout)
+
+	if timeout.Nanoseconds() <= 0 {
 		timeout = im.forwardTimeout
 	}
 
