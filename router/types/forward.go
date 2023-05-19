@@ -91,7 +91,7 @@ func (o JSONObject) MarshalJSON() ([]byte, error) {
 }
 
 func (d Duration) MarshalJSON() ([]byte, error) {
-	return json.Marshal(time.Duration(d).String())
+	return json.Marshal(time.Duration(d).Nanoseconds())
 }
 
 func (d *Duration) UnmarshalJSON(b []byte) error {
