@@ -138,12 +138,17 @@ func (im IBCMiddleware) OnRecvPacket(
 		"amount", data.Amount, "denom", data.Denom,
 	)
 
-	m := &types.PacketMetadata{}
-	err := json.Unmarshal([]byte(data.Memo), m)
-	if err != nil || m.Forward == nil {
+	d := make(map[string]interface{})
+	err := json.Unmarshal([]byte(data.Memo), &d)
+	if err != nil || d["forward"] == "" {
 		// not a packet that should be forwarded
 		im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return im.app.OnRecvPacket(ctx, packet, relayer)
+	}
+	m := &types.PacketMetadata{}
+	err = json.Unmarshal([]byte(data.Memo), m)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("packetForwardMiddleware error parsing forward metadata, %s", err))
 	}
 
 	metadata := m.Forward

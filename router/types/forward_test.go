@@ -42,7 +42,7 @@ func TestTimeoutUnmarshalString(t *testing.T) {
 	timeoutBz, err := json.Marshal(packetMetadata.Forward.Timeout)
 	require.NoError(t, err)
 
-	require.Equal(t, "\"1m0s\"", string(timeoutBz))
+	require.Equal(t, "60000000000", string(timeoutBz))
 }
 
 func TestTimeoutUnmarshalJSON(t *testing.T) {
@@ -55,5 +55,5 @@ func TestTimeoutUnmarshalJSON(t *testing.T) {
 	timeoutBz, err := json.Marshal(packetMetadata.Forward.Timeout)
 	require.NoError(t, err)
 
-	require.Equal(t, "\"1m0s\"", string(timeoutBz))
+	require.Equal(t, "60000000000", string(timeoutBz))
 }
