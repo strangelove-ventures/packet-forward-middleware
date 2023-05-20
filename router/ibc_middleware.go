@@ -140,7 +140,7 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	d := make(map[string]interface{})
 	err := json.Unmarshal([]byte(data.Memo), &d)
-	if err != nil || d["forward"] == "" {
+	if err != nil || d["forward"] == nil {
 		// not a packet that should be forwarded
 		im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return im.app.OnRecvPacket(ctx, packet, relayer)
