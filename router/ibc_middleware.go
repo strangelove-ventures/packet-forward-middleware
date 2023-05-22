@@ -135,7 +135,7 @@ func (im IBCMiddleware) OnRecvPacket(
 		"sequence", packet.Sequence,
 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		"amount", data.Amount, "denom", data.Denom,
+		"amount", data.Amount, "denom", data.Denom, "memo", data.Memo,
 	)
 
 	d := make(map[string]interface{})

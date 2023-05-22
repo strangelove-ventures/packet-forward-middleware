@@ -138,6 +138,33 @@ func TestOnRecvPacket_NoForward(t *testing.T) {
 	require.Equal(t, "test", string(expectedAck.GetResult()))
 }
 
+func TestOnRecvPacket_NoMemo(t *testing.T) {
+	ctl := gomock.NewController(t)
+	defer ctl.Finish()
+	setup := test.NewTestSetup(t, ctl)
+	ctx := setup.Initializer.Ctx
+	cdc := setup.Initializer.Marshaler
+	forwardMiddleware := setup.ForwardMiddleware
+
+	// Test data
+	senderAccAddr := test.AccAddress()
+	packet := transferPacket(t, "cosmos16plylpsgxechajltx9yeseqexzdzut9g8vla4k", "{}")
+
+	// Expected mocks
+	gomock.InOrder(
+		setup.Mocks.IBCModuleMock.EXPECT().OnRecvPacket(ctx, packet, senderAccAddr).
+			Return(channeltypes.NewResultAcknowledgement([]byte("test"))),
+	)
+
+	ack := forwardMiddleware.OnRecvPacket(ctx, packet, senderAccAddr)
+	require.True(t, ack.Success())
+
+	expectedAck := &channeltypes.Acknowledgement{}
+	err := cdc.UnmarshalJSON(ack.Acknowledgement(), expectedAck)
+	require.NoError(t, err)
+	require.Equal(t, "test", string(expectedAck.GetResult()))
+}
+
 func TestOnRecvPacket_RecvPacketFailed(t *testing.T) {
 	ctl := gomock.NewController(t)
 	defer ctl.Finish()
