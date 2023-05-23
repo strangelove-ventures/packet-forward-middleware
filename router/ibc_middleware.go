@@ -148,15 +148,20 @@ func (im IBCMiddleware) OnRecvPacket(
 		"sequence", packet.Sequence,
 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		"amount", data.Amount, "denom", data.Denom,
+		"amount", data.Amount, "denom", data.Denom, "memo", data.Memo,
 	)
 
-	m := &types.PacketMetadata{}
-	err := json.Unmarshal([]byte(data.Memo), m)
-	if err != nil || m.Forward == nil {
+	d := make(map[string]interface{})
+	err := json.Unmarshal([]byte(data.Memo), &d)
+	if err != nil || d["forward"] == nil {
 		// not a packet that should be forwarded
 		im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return im.app.OnRecvPacket(ctx, packet, relayer)
+	}
+	m := &types.PacketMetadata{}
+	err = json.Unmarshal([]byte(data.Memo), m)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("packetForwardMiddleware error parsing forward metadata, %s", err))
 	}
 
 	metadata := m.Forward
@@ -198,10 +203,9 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	token := sdk.NewCoin(denomOnThisChain, amountInt)
 
-	var timeout time.Duration
-	if metadata.Timeout.Nanoseconds() > 0 {
-		timeout = metadata.Timeout
-	} else {
+	timeout := time.Duration(metadata.Timeout)
+
+	if timeout.Nanoseconds() <= 0 {
 		timeout = im.forwardTimeout
 	}
 
