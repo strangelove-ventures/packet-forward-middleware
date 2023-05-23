@@ -177,7 +177,7 @@ go.sum: go.mod
 ###############################################################################
 
 test: test-unit
-test-all: test-unit test-ledger-mock test-race test-cover
+test-all: test-unit test-ledger-mock test-race
 
 TEST_PACKAGES=./...
 TEST_TARGETS := test-unit test-unit-amino test-unit-proto test-ledger-mock test-race test-ledger test-race
