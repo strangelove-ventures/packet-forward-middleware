@@ -161,7 +161,7 @@ func (im IBCMiddleware) OnRecvPacket(
 	m := &types.PacketMetadata{}
 	err = json.Unmarshal([]byte(data.Memo), m)
 	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("packetForwardMiddleware error parsing forward metadata, %s", err))
+		return channeltypes.NewErrorAcknowledgement(fmt.Errorf("packetForwardMiddleware error parsing forward metadata, %s", err))
 	}
 
 	metadata := m.Forward
