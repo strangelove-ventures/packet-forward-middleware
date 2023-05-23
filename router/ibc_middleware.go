@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
 	"github.com/armon/go-metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -161,7 +162,7 @@ func (im IBCMiddleware) OnRecvPacket(
 	m := &types.PacketMetadata{}
 	err = json.Unmarshal([]byte(data.Memo), m)
 	if err != nil {
-		return channeltypes.NewErrorAcknowledgement(fmt.Sprintf("packetForwardMiddleware error parsing forward metadata, %s", err))
+		return channeltypes.NewErrorAcknowledgement(fmt.Errorf("packetForwardMiddleware error parsing forward metadata, %s", err))
 	}
 
 	metadata := m.Forward
@@ -253,7 +254,7 @@ func (im IBCMiddleware) OnAcknowledgementPacket(
 
 	var ack channeltypes.Acknowledgement
 	if err := channeltypes.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
+		return errorsmod.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
 	inFlightPacket := im.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
