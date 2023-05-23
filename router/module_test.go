@@ -335,7 +335,6 @@ func TestOnRecvPacket_ForwardAmountInt256(t *testing.T) {
 				destAddr,
 				keeper.DefaultTransferPacketTimeoutHeight,
 				uint64(ctx.BlockTime().UnixNano())+uint64(keeper.DefaultForwardTransferPacketTimeoutTimestamp.Nanoseconds()),
-				"",
 			),
 		).Return(&transfertypes.MsgTransferResponse{Sequence: 0}, nil),
 
