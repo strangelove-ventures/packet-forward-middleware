@@ -118,6 +118,18 @@ func getDenomForThisChain(port, channel, counterpartyPort, counterpartyChannel, 
 	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 }
 
+// getBoolFromAny returns the bool value is any is a valid bool, otherwise false.
+func getBoolFromAny(value any) bool {
+	if value == nil {
+		return false
+	}
+	boolVal, ok := value.(bool)
+	if !ok {
+		return false
+	}
+	return boolVal
+}
+
 // OnRecvPacket checks the memo field on this packet and if the metadata inside's root key indicates this packet
 // should be handled by the swap middleware it attempts to perform a swap. If the swap is successful
 // the underlying application's OnRecvPacket callback is invoked, an ack error is returned otherwise.
@@ -148,27 +160,10 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	metadata := m.Forward
 
-	var processed, nonrefundable, disableDenomComposition bool
 	goCtx := ctx.Context()
-	p := goCtx.Value(types.ProcessedKey{})
-	nr := goCtx.Value(types.NonrefundableKey{})
-	ddc := goCtx.Value(types.DisableDenomCompositionKey{})
-
-	if p != nil {
-		if pb, ok := p.(bool); ok {
-			processed = pb
-		}
-	}
-	if nr != nil {
-		if nrb, ok := p.(bool); ok {
-			nonrefundable = nrb
-		}
-	}
-	if ddc != nil {
-		if ddcb, ok := p.(bool); ok {
-			disableDenomComposition = ddcb
-		}
-	}
+	processed := getBoolFromAny(goCtx.Value(types.ProcessedKey{}))
+	nonrefundable := getBoolFromAny(goCtx.Value(types.NonrefundableKey{}))
+	disableDenomComposition := getBoolFromAny(goCtx.Value(types.DisableDenomCompositionKey{}))
 
 	if err := metadata.Validate(); err != nil {
 		return channeltypes.NewErrorAcknowledgement(err)
