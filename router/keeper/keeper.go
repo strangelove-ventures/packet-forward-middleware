@@ -99,7 +99,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ack channeltypes.Acknowledgement,
 ) error {
 	// Lookup module by channel capability
-	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
+	_, chanCap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
 		return sdkerrors.Wrap(err, "could not retrieve module from port-id")
 	}
@@ -114,7 +114,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
 			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
 
-			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 				Data:               inFlightPacket.PacketData,
 				Sequence:           inFlightPacket.RefundSequence,
 				SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -182,7 +182,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
