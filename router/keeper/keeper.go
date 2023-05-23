@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
 	"github.com/armon/go-metrics"
 	"github.com/cosmos/cosmos-sdk/codec"
 	storetypes "github.com/cosmos/cosmos-sdk/store/types"
@@ -98,9 +99,9 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ack channeltypes.Acknowledgement,
 ) error {
 	// Lookup module by channel capability
-	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
+	_, chanCap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
-		return sdkerrors.Wrap(err, "could not retrieve module from port-id")
+		return errorsmod.Wrap(err, "could not retrieve module from port-id")
 	}
 
 	// for forwarded packets, the funds were moved into an escrow account if the denom originated on this chain.
@@ -113,7 +114,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
 			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
 
-			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 				Data:               inFlightPacket.PacketData,
 				Sequence:           inFlightPacket.RefundSequence,
 				SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -181,7 +182,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -223,7 +224,7 @@ func (k *Keeper) ForwardTransferPacket(
 			k.Logger(ctx).Error("packetForwardMiddleware error funding community pool",
 				"error", err,
 			)
-			return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
+			return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 
@@ -236,7 +237,7 @@ func (k *Keeper) ForwardTransferPacket(
 			k.Logger(ctx).Error("packetForwardMiddleware error marshaling next as JSON",
 				"error", err,
 			)
-			return sdkerrors.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
+			return errorsmod.Wrapf(sdkerrors.ErrJSONMarshal, err.Error())
 		}
 		memo = string(memoBz)
 	}
@@ -270,7 +271,7 @@ func (k *Keeper) ForwardTransferPacket(
 			"amount", packetCoin.Amount.String(), "denom", packetCoin.Denom,
 			"error", err,
 		)
-		return sdkerrors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
+		return errorsmod.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
 
 	// Store the following information in keeper:
@@ -304,11 +305,13 @@ func (k *Keeper) ForwardTransferPacket(
 	store.Set(key, bz)
 
 	defer func() {
-		telemetry.SetGaugeWithLabels(
-			[]string{"tx", "msg", "ibc", "transfer"},
-			float32(token.Amount.Int64()),
-			[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
-		)
+		if token.Amount.IsInt64() {
+			telemetry.SetGaugeWithLabels(
+				[]string{"tx", "msg", "ibc", "transfer"},
+				float32(token.Amount.Int64()),
+				[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
+			)
+		}
 
 		telemetry.IncrCounterWithLabels(
 			[]string{"ibc", types.ModuleName, "send"},

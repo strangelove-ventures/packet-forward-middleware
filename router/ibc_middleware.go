@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	errorsmod "cosmossdk.io/errors"
 	"github.com/armon/go-metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -119,6 +120,18 @@ func getDenomForThisChain(port, channel, counterpartyPort, counterpartyChannel, 
 	return transfertypes.ParseDenomTrace(prefixedDenom).IBCDenom()
 }
 
+// getBoolFromAny returns the bool value is any is a valid bool, otherwise false.
+func getBoolFromAny(value any) bool {
+	if value == nil {
+		return false
+	}
+	boolVal, ok := value.(bool)
+	if !ok {
+		return false
+	}
+	return boolVal
+}
+
 // OnRecvPacket checks the memo field on this packet and if the metadata inside's root key indicates this packet
 // should be handled by the swap middleware it attempts to perform a swap. If the swap is successful
 // the underlying application's OnRecvPacket callback is invoked, an ack error is returned otherwise.
@@ -136,40 +149,28 @@ func (im IBCMiddleware) OnRecvPacket(
 		"sequence", packet.Sequence,
 		"src-channel", packet.SourceChannel, "src-port", packet.SourcePort,
 		"dst-channel", packet.DestinationChannel, "dst-port", packet.DestinationPort,
-		"amount", data.Amount, "denom", data.Denom,
+		"amount", data.Amount, "denom", data.Denom, "memo", data.Memo,
 	)
 
-	m := &types.PacketMetadata{}
-	err := json.Unmarshal([]byte(data.Memo), m)
-	if err != nil || m.Forward == nil {
+	d := make(map[string]interface{})
+	err := json.Unmarshal([]byte(data.Memo), &d)
+	if err != nil || d["forward"] == nil {
 		// not a packet that should be forwarded
 		im.keeper.Logger(ctx).Debug("packetForwardMiddleware OnRecvPacket forward metadata does not exist")
 		return im.app.OnRecvPacket(ctx, packet, relayer)
 	}
+	m := &types.PacketMetadata{}
+	err = json.Unmarshal([]byte(data.Memo), m)
+	if err != nil {
+		return channeltypes.NewErrorAcknowledgement(fmt.Errorf("packetForwardMiddleware error parsing forward metadata, %s", err))
+	}
 
 	metadata := m.Forward
 
-	var processed, nonrefundable, disableDenomComposition bool
 	goCtx := ctx.Context()
-	p := goCtx.Value(types.ProcessedKey{})
-	nr := goCtx.Value(types.NonrefundableKey{})
-	ddc := goCtx.Value(types.DisableDenomCompositionKey{})
-
-	if p != nil {
-		if pb, ok := p.(bool); ok {
-			processed = pb
-		}
-	}
-	if nr != nil {
-		if nrb, ok := p.(bool); ok {
-			nonrefundable = nrb
-		}
-	}
-	if ddc != nil {
-		if ddcb, ok := p.(bool); ok {
-			disableDenomComposition = ddcb
-		}
-	}
+	processed := getBoolFromAny(goCtx.Value(types.ProcessedKey{}))
+	nonrefundable := getBoolFromAny(goCtx.Value(types.NonrefundableKey{}))
+	disableDenomComposition := getBoolFromAny(goCtx.Value(types.DisableDenomCompositionKey{}))
 
 	if err := metadata.Validate(); err != nil {
 		return channeltypes.NewErrorAcknowledgement(err)
@@ -203,10 +204,9 @@ func (im IBCMiddleware) OnRecvPacket(
 
 	token := sdk.NewCoin(denomOnThisChain, amountInt)
 
-	var timeout time.Duration
-	if metadata.Timeout.Nanoseconds() > 0 {
-		timeout = metadata.Timeout
-	} else {
+	timeout := time.Duration(metadata.Timeout)
+
+	if timeout.Nanoseconds() <= 0 {
 		timeout = im.forwardTimeout
 	}
 
@@ -254,7 +254,7 @@ func (im IBCMiddleware) OnAcknowledgementPacket(
 
 	var ack channeltypes.Acknowledgement
 	if err := channeltypes.SubModuleCdc.UnmarshalJSON(acknowledgement, &ack); err != nil {
-		return sdkerrors.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
+		return errorsmod.Wrapf(sdkerrors.ErrUnknownRequest, "cannot unmarshal ICS-20 transfer packet acknowledgement: %v", err)
 	}
 
 	inFlightPacket := im.keeper.GetAndClearInFlightPacket(ctx, packet.SourceChannel, packet.SourcePort, packet.Sequence)
