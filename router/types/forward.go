@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -14,16 +15,18 @@ type PacketMetadata struct {
 }
 
 type ForwardMetadata struct {
-	Receiver string        `json:"receiver,omitempty"`
-	Port     string        `json:"port,omitempty"`
-	Channel  string        `json:"channel,omitempty"`
-	Timeout  time.Duration `json:"timeout,omitempty"`
-	Retries  *uint8        `json:"retries,omitempty"`
+	Receiver string   `json:"receiver,omitempty"`
+	Port     string   `json:"port,omitempty"`
+	Channel  string   `json:"channel,omitempty"`
+	Timeout  Duration `json:"timeout,omitempty"`
+	Retries  *uint8   `json:"retries,omitempty"`
 
 	// Using JSONObject so that objects for next property will not be mutated by golang's lexicographic key sort on map keys during Marshal.
 	// Supports primitives for Unmarshal/Marshal so that an escaped JSON-marshaled string is also valid.
 	Next *JSONObject `json:"next,omitempty"`
 }
+
+type Duration time.Duration
 
 func (m *ForwardMetadata) Validate() error {
 	if m.Receiver == "" {
@@ -85,4 +88,29 @@ func (o JSONObject) MarshalJSON() ([]byte, error) {
 	}
 	// primitive, return raw bytes.
 	return o.primitive, nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Duration(d).Nanoseconds())
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var v interface{}
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	switch value := v.(type) {
+	case float64:
+		*d = Duration(time.Duration(value))
+		return nil
+	case string:
+		tmp, err := time.ParseDuration(value)
+		if err != nil {
+			return err
+		}
+		*d = Duration(tmp)
+		return nil
+	default:
+		return errors.New("invalid duration")
+	}
 }
