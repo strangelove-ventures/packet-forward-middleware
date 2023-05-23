@@ -100,7 +100,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 	ack channeltypes.Acknowledgement,
 ) error {
 	// Lookup module by channel capability
-	_, cap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
+	_, chanCap, err := k.channelKeeper.LookupModuleByChannel(ctx, inFlightPacket.RefundPortId, inFlightPacket.RefundChannelId)
 	if err != nil {
 		return errorsmod.Wrap(err, "could not retrieve module from port-id")
 	}
@@ -115,7 +115,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 			ackResult := fmt.Sprintf("packet forward failed after point of no return: %s", ack.GetError())
 			newAck := channeltypes.NewResultAcknowledgement([]byte(ackResult))
 
-			return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+			return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 				Data:               inFlightPacket.PacketData,
 				Sequence:           inFlightPacket.RefundSequence,
 				SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -183,7 +183,7 @@ func (k *Keeper) WriteAcknowledgementForForwardedPacket(
 		}
 	}
 
-	return k.ics4Wrapper.WriteAcknowledgement(ctx, cap, channeltypes.Packet{
+	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, channeltypes.Packet{
 		Data:               inFlightPacket.PacketData,
 		Sequence:           inFlightPacket.RefundSequence,
 		SourcePort:         inFlightPacket.PacketSrcPortId,
@@ -303,11 +303,13 @@ func (k *Keeper) ForwardTransferPacket(
 	store.Set(key, bz)
 
 	defer func() {
-		telemetry.SetGaugeWithLabels(
-			[]string{"tx", "msg", "ibc", "transfer"},
-			float32(token.Amount.Int64()),
-			[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
-		)
+		if token.Amount.IsInt64() {
+			telemetry.SetGaugeWithLabels(
+				[]string{"tx", "msg", "ibc", "transfer"},
+				float32(token.Amount.Int64()),
+				[]metrics.Label{telemetry.NewLabel(coretypes.LabelDenom, token.Denom)},
+			)
+		}
 
 		telemetry.IncrCounterWithLabels(
 			[]string{"ibc", types.ModuleName, "send"},

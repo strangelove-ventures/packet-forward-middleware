@@ -36,10 +36,10 @@ func (AppModuleBasic) Name() string {
 }
 
 // RegisterLegacyAminoCodec implements AppModuleBasic interface
-func (AppModuleBasic) RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {}
+func (AppModuleBasic) RegisterLegacyAminoCodec(_ *codec.LegacyAmino) {}
 
 // RegisterInterfaces registers module concrete types into protobuf Any.
-func (AppModuleBasic) RegisterInterfaces(registry codectypes.InterfaceRegistry) {}
+func (AppModuleBasic) RegisterInterfaces(_ codectypes.InterfaceRegistry) {}
 
 // DefaultGenesis returns default genesis state as raw bytes for the ibc
 // router module.
@@ -48,7 +48,7 @@ func (AppModuleBasic) DefaultGenesis(cdc codec.JSONCodec) json.RawMessage {
 }
 
 // ValidateGenesis performs genesis state validation for the router module.
-func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncodingConfig, bz json.RawMessage) error {
+func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, _ client.TxEncodingConfig, bz json.RawMessage) error {
 	var gs types.GenesisState
 	if err := cdc.UnmarshalJSON(bz, &gs); err != nil {
 		return fmt.Errorf("failed to unmarshal %s genesis state: %w", types.ModuleName, err)
@@ -58,7 +58,7 @@ func (AppModuleBasic) ValidateGenesis(cdc codec.JSONCodec, config client.TxEncod
 }
 
 // RegisterRESTRoutes implements AppModuleBasic interface
-func (AppModuleBasic) RegisterRESTRoutes(clientCtx client.Context, rtr *mux.Router) {}
+func (AppModuleBasic) RegisterRESTRoutes(_ client.Context, _ *mux.Router) {}
 
 // RegisterGRPCGatewayRoutes registers the gRPC Gateway routes for the ibc-router module.
 func (AppModuleBasic) RegisterGRPCGatewayRoutes(clientCtx client.Context, mux *runtime.ServeMux) {
@@ -89,7 +89,7 @@ func NewAppModule(k *keeper.Keeper) AppModule {
 }
 
 // RegisterInvariants implements the AppModule interface
-func (AppModule) RegisterInvariants(ir sdk.InvariantRegistry) {}
+func (AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
 // Route implements the AppModule interface
 func (am AppModule) Route() sdk.Route {
@@ -131,17 +131,17 @@ func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.Raw
 func (AppModule) ConsensusVersion() uint64 { return 1 }
 
 // BeginBlock implements the AppModule interface
-func (am AppModule) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {}
+func (am AppModule) BeginBlock(_ sdk.Context, _ abci.RequestBeginBlock) {}
 
 // EndBlock implements the AppModule interface
-func (am AppModule) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) []abci.ValidatorUpdate {
+func (am AppModule) EndBlock(_ sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
 	return []abci.ValidatorUpdate{}
 }
 
 // AppModuleSimulation functions
 
 // GenerateGenesisState creates a randomized GenState of the router module.
-func (AppModule) GenerateGenesisState(simState *module.SimulationState) {}
+func (AppModule) GenerateGenesisState(_ *module.SimulationState) {}
 
 // ProposalContents doesn't return any content functions for governance proposals.
 func (AppModule) ProposalContents(_ module.SimulationState) []simtypes.WeightedProposalContent {
@@ -149,12 +149,12 @@ func (AppModule) ProposalContents(_ module.SimulationState) []simtypes.WeightedP
 }
 
 // RandomizedParams creates randomized ibc-router param changes for the simulator.
-func (AppModule) RandomizedParams(r *rand.Rand) []simtypes.ParamChange {
+func (AppModule) RandomizedParams(_ *rand.Rand) []simtypes.ParamChange {
 	return nil
 }
 
 // RegisterStoreDecoder registers a decoder for router module's types
-func (am AppModule) RegisterStoreDecoder(sdr sdk.StoreDecoderRegistry) {}
+func (am AppModule) RegisterStoreDecoder(_ sdk.StoreDecoderRegistry) {}
 
 // WeightedOperations returns the all the router module operations with their respective weights.
 func (am AppModule) WeightedOperations(_ module.SimulationState) []simtypes.WeightedOperation {
