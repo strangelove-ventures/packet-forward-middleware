@@ -8,14 +8,14 @@ Asynchronous acknowledgements are utilized for atomic multi-hop packet flows. Th
 The packet-forward-middleware is an IBC middleware module built for Cosmos blockchains utilizing the IBC protocol. A chain which incorporates the 
 packet-forward-middleware is able to route incoming IBC packets from a source chain to a destination chain. As the Cosmos SDK/IBC become commonplace in the 
 blockchain space more and more zones will come online, these new zones joining are noticing a problem: they need to maintain a large amount of infrastructure 
-(archive nodes and relayers for each counterparty chain) to connect with all the chains in the ecosystem, a number that is continuing to increase quickly. Luckly 
-this problem has been anticipated and IBC has been architected to accomodate multi-hop transactions. However, a packet forwarding/routing feature was not in the 
+(archive nodes and relayers for each counterparty chain) to connect with all the chains in the ecosystem, a number that is continuing to increase quickly. Luckily 
+this problem has been anticipated and IBC has been architected to accommodate multi-hop transactions. However, a packet forwarding/routing feature was not in the 
 initial IBC release. 
 
 ## Sequence diagrams
 
 ### Multi-hop A->B->C->D success
-```
+```ascii
         channel-0 channel-1         channel-2 channel-3        channel-4 channel-5
 ┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐        ibc       ┌───────┐
 │Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│◄────────────────►│Chain D│
@@ -27,7 +27,7 @@ initial IBC release.
 ```
 
 ### Multi-hop A->B->C->D, C->D `recv_packet` error, refund back to A
-```
+```ascii
         channel-0 channel-1         channel-2 channel-3        channel-4 channel-5
 ┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐        ibc       ┌───────┐
 │Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│◄────────────────►│Chain D│
@@ -39,7 +39,7 @@ initial IBC release.
 ```
 
 ### Forward A->B->C with 1 retry, max timeouts occurs, refund back to A
-```
+```ascii
         channel-0 channel-1         channel-2 channel-3
 ┌───────┐       ibc        ┌───────┐        ibc       ┌───────┐
 │Chain A│◄────────────────►│Chain B│◄────────────────►│Chain C│
@@ -63,7 +63,7 @@ Utilizing the packet `memo` field, instructions can be encoded as JSON for multi
 - The packet-forward-middleware integrated on Chain B.
 - The packet `memo` is included in `MsgTransfer` by user on Chain A.
 
-```
+```json
 {
   "forward": {
     "receiver": "chain-c-bech32-address",
@@ -84,7 +84,7 @@ In the case of a timeout after 10 minutes for either forward, the packet would b
 `next` is the `memo` to pass for the next transfer hop. Per `memo` intended usage of a JSON string, it should be either JSON which will be Marshaled retaining key order, or an escaped JSON string which will be passed directly.
 
 `next` as JSON
-```
+```json
 {
   "forward": {
     "receiver": "chain-c-bech32-address",
@@ -106,7 +106,7 @@ In the case of a timeout after 10 minutes for either forward, the packet would b
 ```
 
 `next` as escaped JSON string
-```
+```json
 {
   "forward": {
     "receiver": "chain-c-bech32-address",
@@ -127,7 +127,7 @@ Describes `A` sending to `C` via `B` in several scenarios with operational opene
 
 Generally without `memo` to handle, all handling by this module is delegated to ICS-020. ICS-020 ACK are written and parsed in any case (ACK are backwarded).
 
-# A -> B -> C full success
+### A -> B -> C full success
 
 1. `A` This sends packet over underlying ICS-004 wrapper with memo as is.
 2. `B` This receives packet and parses it into ICS-020 packet.
@@ -141,7 +141,7 @@ Generally without `memo` to handle, all handling by this module is delegated to 
 10. `B` On ICS-020 ACK from `C` find `in flight packet`, delete it and write `ACK` for original packet from `A`.
 11. `A` Handle ICS-020 `ACK` as usual 
 
-# A -> B -> C with C error ACK
+### A -> B -> C with C error ACK
 
 10. `B` On ICS-020 ACK from `C` find `in flight packet`, delete it 
 11. `B` Burns or escrows tokens.
