@@ -14,8 +14,9 @@ import (
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
+
 	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	capabilityibctypes "github.com/cosmos/ibc-go/modules/capability/types"
 	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -442,7 +443,7 @@ func (k *Keeper) GetAndClearInFlightPacket(
 // SendPacket wraps IBC ChannelKeeper's SendPacket function
 func (k Keeper) SendPacket(
 	ctx sdk.Context,
-	chanCap *capabilitytypes.Capability,
+	chanCap *capabilityibctypes.Capability,
 	sourcePort string, sourceChannel string,
 	timeoutHeight clienttypes.Height,
 	timeoutTimestamp uint64,
@@ -453,7 +454,7 @@ func (k Keeper) SendPacket(
 
 // WriteAcknowledgement wraps IBC ICS4Wrapper WriteAcknowledgement function.
 // ICS29 WriteAcknowledgement is used for asynchronous acknowledgements.
-func (k *Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilitytypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
+func (k *Keeper) WriteAcknowledgement(ctx sdk.Context, chanCap *capabilityibctypes.Capability, packet ibcexported.PacketI, acknowledgement ibcexported.Acknowledgement) error {
 	return k.ics4Wrapper.WriteAcknowledgement(ctx, chanCap, packet, acknowledgement)
 }
 
@@ -467,6 +468,6 @@ func (k *Keeper) GetAppVersion(
 }
 
 // LookupModuleByChannel wraps ChannelKeeper LookupModuleByChannel function.
-func (k *Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilitytypes.Capability, error) {
+func (k *Keeper) LookupModuleByChannel(ctx sdk.Context, portID, channelID string) (string, *capabilityibctypes.Capability, error) {
 	return k.channelKeeper.LookupModuleByChannel(ctx, portID, channelID)
 }

@@ -10,7 +10,8 @@ import (
 	"github.com/armon/go-metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
-	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
+
+	capabilityibctypes "github.com/cosmos/ibc-go/modules/capability/types"
 	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -57,7 +58,7 @@ func (im IBCMiddleware) OnChanOpenInit(
 	connectionHops []string,
 	portID string,
 	channelID string,
-	chanCap *capabilitytypes.Capability,
+	chanCap *capabilityibctypes.Capability,
 	counterparty channeltypes.Counterparty,
 	version string,
 ) (string, error) {
@@ -70,7 +71,7 @@ func (im IBCMiddleware) OnChanOpenTry(
 	order channeltypes.Order,
 	connectionHops []string,
 	portID, channelID string,
-	chanCap *capabilitytypes.Capability,
+	chanCap *capabilityibctypes.Capability,
 	counterparty channeltypes.Counterparty,
 	counterpartyVersion string,
 ) (version string, err error) {
@@ -307,7 +308,7 @@ func (im IBCMiddleware) OnTimeoutPacket(ctx sdk.Context, packet channeltypes.Pac
 // SendPacket implements the ICS4 Wrapper interface.
 func (im IBCMiddleware) SendPacket(
 	ctx sdk.Context,
-	chanCap *capabilitytypes.Capability,
+	chanCap *capabilityibctypes.Capability,
 	sourcePort string, sourceChannel string,
 	timeoutHeight clienttypes.Height,
 	timeoutTimestamp uint64,
@@ -319,7 +320,7 @@ func (im IBCMiddleware) SendPacket(
 // WriteAcknowledgement implements the ICS4 Wrapper interface.
 func (im IBCMiddleware) WriteAcknowledgement(
 	ctx sdk.Context,
-	chanCap *capabilitytypes.Capability,
+	chanCap *capabilityibctypes.Capability,
 	packet ibcexported.PacketI,
 	ack ibcexported.Acknowledgement,
 ) error {
