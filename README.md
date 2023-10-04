@@ -1,4 +1,7 @@
 # packet-forward-middleware
+
+**THIS REPO HAS BEEN ARCHIVED, ALL NEW PRS AND ISSUE TRACKING WILL BE CONDUCTED IN THE UPSTREAM REPO --> <https://github.com/cosmos/ibc-apps>**
+
 Middleware for forwarding IBC packets.
 
 Asynchronous acknowledgements are utilized for atomic multi-hop packet flows. The acknowledgement will only be written on the chain where the user initiated the packet flow after the forward/multi-hop sequence has completed (success or failure). This means that a user (i.e. an IBC application) only needs to monitor the chain where the initial transfer was sent for the response of the entire process.
